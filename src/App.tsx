@@ -4804,6 +4804,120 @@ export function CustomPageLockScreen({ title, message, onBack }: { title: string
   );
 }
 
+const getThemeByModule = (itemId: string) => {
+  const normalizedId = itemId.toLowerCase();
+  
+  // Inventory & Warehouse related
+  if (
+    normalizedId.includes('inventory') || 
+    normalizedId.includes('warehouse') || 
+    normalizedId.includes('supplier') || 
+    normalizedId.includes('barcode') || 
+    normalizedId.includes('damage') || 
+    normalizedId.includes('transfer') || 
+    normalizedId.includes('stock') ||
+    normalizedId.includes('product')
+  ) {
+    return {
+      bg: 'bg-emerald-50/70 dark:bg-emerald-950/20',
+      color: 'text-emerald-600 dark:text-emerald-400',
+      border: 'border-emerald-100/50 dark:border-emerald-900/30',
+      activeBg: 'bg-emerald-50 dark:bg-emerald-950/40',
+      hoverBg: 'hover:bg-emerald-50/30 dark:hover:bg-emerald-950/10',
+      textActive: 'text-emerald-600 dark:text-emerald-400 font-bold',
+      iconActive: 'text-emerald-600 dark:text-emerald-400 bg-emerald-100/60 dark:bg-emerald-900/40',
+      iconInactive: 'text-gray-400 dark:text-slate-500 group-hover:text-emerald-500 dark:group-hover:text-emerald-400 bg-slate-50/60 dark:bg-slate-950/30 group-hover:bg-emerald-50 dark:group-hover:bg-emerald-950/20',
+      accent: 'bg-emerald-500 dark:bg-emerald-400'
+    };
+  }
+
+  // Sales & CRM related
+  if (
+    normalizedId.includes('sales') || 
+    normalizedId.includes('customer') || 
+    normalizedId.includes('branch') || 
+    normalizedId.includes('courier') || 
+    normalizedId.includes('warranty') || 
+    normalizedId.includes('service') || 
+    normalizedId.includes('note') || 
+    normalizedId.includes('recycle') ||
+    normalizedId.includes('marketing') ||
+    normalizedId.includes('pos')
+  ) {
+    return {
+      bg: 'bg-sky-50/70 dark:bg-sky-950/20',
+      color: 'text-sky-600 dark:text-sky-400',
+      border: 'border-sky-100/50 dark:border-sky-900/30',
+      activeBg: 'bg-sky-50 dark:bg-sky-950/40',
+      hoverBg: 'hover:bg-sky-50/30 dark:hover:bg-sky-950/10',
+      textActive: 'text-sky-600 dark:text-sky-400 font-bold',
+      iconActive: 'text-sky-600 dark:text-sky-400 bg-sky-100/60 dark:bg-sky-900/40',
+      iconInactive: 'text-gray-400 dark:text-slate-500 group-hover:text-sky-500 dark:group-hover:text-sky-400 bg-slate-50/60 dark:bg-slate-950/30 group-hover:bg-sky-50 dark:group-hover:bg-sky-950/20',
+      accent: 'bg-sky-500 dark:bg-sky-400'
+    };
+  }
+
+  // Accounting, Bills & Payments related
+  if (
+    normalizedId.includes('accounting') || 
+    normalizedId.includes('closing') || 
+    normalizedId.includes('loan') || 
+    normalizedId.includes('expense') || 
+    normalizedId.includes('invoice') || 
+    normalizedId.includes('payment') || 
+    normalizedId.includes('billing') ||
+    normalizedId.includes('due')
+  ) {
+    return {
+      bg: 'bg-amber-50/70 dark:bg-amber-950/20',
+      color: 'text-amber-600 dark:text-amber-400',
+      border: 'border-amber-100/50 dark:border-amber-900/30',
+      activeBg: 'bg-amber-50 dark:bg-amber-950/40',
+      hoverBg: 'hover:bg-amber-50/30 dark:hover:bg-amber-950/10',
+      textActive: 'text-amber-600 dark:text-amber-400 font-bold',
+      iconActive: 'text-amber-600 dark:text-amber-400 bg-amber-100/60 dark:bg-amber-900/40',
+      iconInactive: 'text-gray-400 dark:text-slate-500 group-hover:text-amber-500 dark:group-hover:text-amber-400 bg-slate-50/60 dark:bg-slate-950/30 group-hover:bg-amber-50 dark:group-hover:bg-amber-950/20',
+      accent: 'bg-amber-500 dark:bg-amber-400'
+    };
+  }
+
+  // HRM, Payroll & Staff related
+  if (
+    normalizedId.includes('hrm') || 
+    normalizedId.includes('employee') || 
+    normalizedId.includes('salary') || 
+    normalizedId.includes('attendance') || 
+    normalizedId.includes('leave') || 
+    normalizedId.includes('payroll') ||
+    normalizedId.includes('staff')
+  ) {
+    return {
+      bg: 'bg-violet-50/70 dark:bg-violet-950/20',
+      color: 'text-violet-600 dark:text-violet-400',
+      border: 'border-violet-100/50 dark:border-violet-900/30',
+      activeBg: 'bg-violet-50 dark:bg-violet-950/40',
+      hoverBg: 'hover:bg-violet-50/30 dark:hover:bg-violet-950/10',
+      textActive: 'text-violet-600 dark:text-violet-400 font-bold',
+      iconActive: 'text-violet-600 dark:text-violet-400 bg-violet-100/60 dark:bg-violet-900/40',
+      iconInactive: 'text-gray-400 dark:text-slate-500 group-hover:text-violet-500 dark:group-hover:text-violet-400 bg-slate-50/60 dark:bg-slate-950/30 group-hover:bg-violet-50 dark:group-hover:bg-violet-950/20',
+      accent: 'bg-violet-500 dark:bg-violet-400'
+    };
+  }
+
+  // Default theme (Dashboard, POS, general tool fallback)
+  return {
+    bg: 'bg-indigo-50/70 dark:bg-indigo-950/20',
+    color: 'text-indigo-600 dark:text-indigo-400',
+    border: 'border-indigo-100/50 dark:border-indigo-900/30',
+    activeBg: 'bg-indigo-50 dark:bg-indigo-950/40',
+    hoverBg: 'hover:bg-indigo-50/30 dark:hover:bg-indigo-950/10',
+    textActive: 'text-indigo-600 dark:text-indigo-400 font-bold',
+    iconActive: 'text-indigo-600 dark:text-indigo-400 bg-indigo-100/60 dark:bg-indigo-900/40',
+    iconInactive: 'text-gray-400 dark:text-slate-500 group-hover:text-indigo-500 dark:group-hover:text-indigo-400 bg-slate-50/60 dark:bg-slate-950/30 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-950/20',
+    accent: 'bg-indigo-500 dark:bg-indigo-400'
+  };
+};
+
 const SidebarNavItem = ({ item, idx, activeTab, setActiveTab, setIsSidebarOpen, isDesktop, user, isMasterAdmin, shopSettings }: any) => {
   const visibleSubItems = item.subItems 
     ? item.subItems.filter((subItem: any) => {
@@ -4870,9 +4984,10 @@ const SidebarNavItem = ({ item, idx, activeTab, setActiveTab, setIsSidebarOpen, 
     }
   };
 
-  const bgClass = item.bg || 'bg-indigo-50';
-  const colorClass = item.color || 'text-indigo-600';
-  const borderClass = item.border || 'border-indigo-100';
+  const theme = getThemeByModule(item.id);
+  const bgClass = item.bg || theme.bg;
+  const colorClass = item.color || theme.color;
+  const borderClass = item.border || theme.border;
 
   const checkPremiumStatus = () => {
     if (user?.email?.toLowerCase().trim() === 'stratproamz@gmail.com') return true;
@@ -4902,24 +5017,30 @@ const SidebarNavItem = ({ item, idx, activeTab, setActiveTab, setIsSidebarOpen, 
         initial={{ x: -20, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
         transition={{ delay: idx * 0.02, ease: "easeOut" }}
-        whileHover={{ x: 6, scale: 1.01 }}
-        whileTap={{ scale: 0.98 }}
+        whileHover={{ x: 4, scale: 1.005 }}
+        whileTap={{ scale: 0.99 }}
         onClick={handleClick}
-        className={`w-full flex items-center justify-between group px-4 py-3 rounded-2xl transition-all duration-300 relative overflow-hidden ${
+        className={`w-full flex items-center justify-between group px-3 py-2.5 rounded-xl transition-all duration-300 relative overflow-hidden outline-none ${
           isSelfActive                
-            ? `${bgClass} dark:bg-indigo-950/40 dark:text-indigo-300 ${colorClass} shadow-sm ring-1 ${borderClass} dark:ring-indigo-900/40 dark:border-indigo-900/40` 
-            : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 hover:text-gray-900 dark:hover:text-gray-100 hover:shadow-md hover:-translate-y-0.5 border border-transparent hover:border-gray-100 dark:hover:border-slate-800'
+            ? `${bgClass} dark:bg-indigo-950/30 ${colorClass} shadow-sm ring-1 ${borderClass} font-bold` 
+            : 'text-gray-500 dark:text-gray-400 hover:bg-slate-50/70 dark:hover:bg-slate-800/40 hover:text-gray-900 dark:hover:text-gray-100 border border-transparent'
         }`}
       >
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 dark:via-white/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-in-out"></div>
-        <div className="flex items-center justify-between gap-3 relative z-10 w-full">
-          <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-xl transition-all duration-300 shadow-sm ${
-              isSelfActive ? 'bg-white dark:bg-slate-800' : `bg-gray-50/50 dark:bg-slate-950/40 group-hover:bg-white dark:group-hover:bg-slate-800 group-hover:${bgClass}`
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 dark:via-white/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out"></div>
+        <div className="flex items-center justify-between gap-2.5 relative z-10 w-full">
+          <div className="flex items-center gap-2.5">
+            <div className={`p-2 rounded-lg transition-all duration-300 shadow-sm ${
+              isSelfActive 
+                ? 'bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-800 shadow-sm' 
+                : theme.iconInactive
             }`}>
-              <item.icon className={`w-4 h-4 transition-transform duration-300 group-hover:scale-110 ${isSelfActive ? `${colorClass} dark:text-indigo-400` : `text-gray-400 dark:text-gray-500 group-hover:${colorClass} dark:group-hover:text-gray-300`}`} />
+              <item.icon className={`w-4 h-4 transition-transform duration-300 group-hover:scale-110 ${
+                isSelfActive ? `${colorClass} dark:text-indigo-400` : ''
+              }`} />
             </div>
-            <span className={`text-[13px] font-bold tracking-tight transition-colors duration-300 ${isSelfActive ? '' : `group-hover:${colorClass}`}`}>{item.label}</span>
+            <span className={`text-[12.5px] font-bold tracking-tight transition-colors duration-300 ${
+              isSelfActive ? '' : `group-hover:${colorClass}`
+            }`}>{item.label}</span>
             
             {/* Version Badge for How To Use */}
             {item.id === 'how_to_use' && (
@@ -4933,19 +5054,19 @@ const SidebarNavItem = ({ item, idx, activeTab, setActiveTab, setIsSidebarOpen, 
 
             {/* Premium locks indicator */}
             {PREMIUM_ONLY_IDS.includes(item.id) && !isPremiumUnlocked && (
-              <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0 animate-pulse" />
             )}
           </div>
           {hasSubItems && (
-            <div onClick={toggleExpand} className="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors ml-2 z-20 flex items-center justify-center">
-               <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${isExpanded ? 'rotate-90' : ''}`} />
+            <div onClick={toggleExpand} className="p-1 rounded-md hover:bg-black/5 dark:hover:bg-white/10 transition-colors ml-2 z-20 flex items-center justify-center">
+               <ChevronRight className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-300 ${isExpanded ? 'rotate-90' : ''}`} />
             </div>
           )}
         </div>
         {isSelfActive && (
           <motion.div 
             layoutId="active-indicator"
-            className={`absolute right-0 top-1/2 -translate-y-1/2 w-1.5 h-8 rounded-l-full ${bgClass.replace('bg-', 'bg-').replace('-50', '-500')} dark:bg-indigo-500`}
+            className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-r-full ${theme.accent}`}
           />
         )}
       </motion.button>
@@ -4957,26 +5078,33 @@ const SidebarNavItem = ({ item, idx, activeTab, setActiveTab, setIsSidebarOpen, 
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden space-y-1 mt-1 ml-[1.6rem] pl-4 border-l-2 border-slate-100 dark:border-slate-800"
+              className="overflow-hidden space-y-0.5 mt-1 ml-[1.1rem] pl-3 border-l border-slate-150 dark:border-slate-800/80"
             >
                {visibleSubItems.map((subItem: any, subIdx: number) => {
                   const isSubActive = activeTab === subItem.id;
                   const isSubLocked = PREMIUM_ONLY_IDS.includes(subItem.id) && !isPremiumUnlocked;
+                  const subTheme = getThemeByModule(subItem.id);
                   return (
                     <motion.button 
                        key={subItem.id} 
-                       initial={{ opacity: 0, x: -10 }}
+                       initial={{ opacity: 0, x: -8 }}
                        animate={{ opacity: 1, x: 0 }}
-                       transition={{ delay: subIdx * 0.05 }}
+                       transition={{ delay: subIdx * 0.03 }}
                        onClick={() => { 
                          setActiveTab(subItem.id); 
                          if(!isDesktop) setIsSidebarOpen(false); 
                        }} 
-                       className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 text-[12.5px] font-semibold tracking-wide ${isSubActive ? `${subItem.bg} ${subItem.color} dark:bg-slate-800/80` : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50 dark:hover:bg-slate-800/50 dark:text-gray-400 dark:hover:text-gray-100'}`}
+                       className={`w-full flex items-center justify-between px-3 py-2 rounded-lg transition-all duration-200 text-[12px] font-bold tracking-wide relative group/sub ${
+                         isSubActive 
+                           ? `${subTheme.bg} ${subTheme.color} dark:bg-slate-800/80 border-l-2 border-indigo-500` 
+                           : 'text-gray-500 hover:text-gray-900 hover:bg-slate-50/60 dark:hover:bg-slate-800/20 dark:text-gray-400 dark:hover:text-gray-100'
+                       }`}
                     >
-                      <div className="flex items-center gap-3">
-                        <subItem.icon className={`w-3.5 h-3.5 ${isSubActive ? subItem.color : 'text-gray-400 group-hover:text-gray-500 dark:text-slate-500'}`} />
-                        {subItem.label}
+                      <div className="flex items-center gap-2.5">
+                        <div className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
+                          isSubActive ? `${subTheme.accent} scale-125 shadow-sm` : 'bg-slate-300 dark:bg-slate-700 group-hover/sub:bg-indigo-400'
+                        }`} />
+                        <span className="truncate">{subItem.label}</span>
                       </div>
 
                       {isSubLocked && (
@@ -5328,6 +5456,25 @@ export default function App() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isManualSyncing, setIsManualSyncing] = useState(false);
   const [showSyncAuditModal, setShowSyncAuditModal] = useState(false);
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('sidebar_collapsed_sections');
+        return saved ? JSON.parse(saved) : {};
+      } catch (e) {
+        return {};
+      }
+    }
+    return {};
+  });
+
+  const toggleSectionCollapse = (sectionId: string) => {
+    setCollapsedSections(prev => {
+      const next = { ...prev, [sectionId]: !prev[sectionId] };
+      localStorage.setItem('sidebar_collapsed_sections', JSON.stringify(next));
+      return next;
+    });
+  };
   const [workingShopId, setWorkingShopId] = useState<string>(() => localStorage.getItem('admin_active_shop_id') || 'master');
 
   useEffect(() => {
@@ -9818,55 +9965,91 @@ export default function App() {
             }).map((group) => {
               // Localized header label (support custom label_bn or default system translation)
               const sectionLabel = shopSettings?.systemLanguage === 'bn' ? (group.label_bn || group.label) : group.label;
+              const isSectionActive = group.items.some(item => {
+                if (item.id === activeTab) return true;
+                if (item.subItems && item.subItems.some(sub => sub.id === activeTab)) return true;
+                return false;
+              });
+              const isCollapsed = !!collapsedSections[group.id] && !isSectionActive;
+              
+              const groupItemsFiltered = group.items.filter(item => {
+                const userEmail = user?.email?.toLowerCase().trim();
+                if (userEmail === 'stratproamz@gmail.com') return true;
+                if (item.isDeleted) return false;
+                if (item.emailScope) return userEmail === item.emailScope.toLowerCase().trim();
+                
+                const hasAllowedRoles = item.allowedRoles && Array.isArray(item.allowedRoles);
+                const hasAllowedUsers = item.allowedUsers && Array.isArray(item.allowedUsers);
+                
+                if (hasAllowedRoles || hasAllowedUsers) {
+                  const roleOk = hasAllowedRoles && item.allowedRoles.includes(user.role);
+                  const userOk = hasAllowedUsers && user.email && item.allowedUsers.some(e => e.toLowerCase().trim() === user.email.toLowerCase().trim());
+                  return roleOk || userOk;
+                }
+                
+                if (item.roles) {
+                  return item.roles.includes(user.role) || isMasterAdmin;
+                }
+                
+                return true;
+              });
+              const visibleItemsCount = groupItemsFiltered.length;
+              const groupTheme = getThemeByModule(group.id || (group.items[0]?.id || ''));
+
               return (
-                <div key={group.id} className="space-y-1 mb-6">
-                  <h3 className="px-5 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">{sectionLabel}</h3>
-                  {group.items.filter(item => {
-                    // Super admin bypass
-                    const userEmail = user?.email?.toLowerCase().trim();
-                    if (userEmail === 'stratproamz@gmail.com') return true;
-                    
-                    // Soft delete check
-                    if (item.isDeleted) return false;
-                    
-                    // Specific email scope
-                    if (item.emailScope) return userEmail === item.emailScope.toLowerCase().trim();
-                    
-                    // custom roles/emails visibilities
-                    const hasAllowedRoles = item.allowedRoles && Array.isArray(item.allowedRoles);
-                    const hasAllowedUsers = item.allowedUsers && Array.isArray(item.allowedUsers);
-                    
-                    if (hasAllowedRoles || hasAllowedUsers) {
-                      const roleOk = hasAllowedRoles && item.allowedRoles.includes(user.role);
-                      const userOk = hasAllowedUsers && user.email && item.allowedUsers.some(e => e.toLowerCase().trim() === user.email.toLowerCase().trim());
-                      return roleOk || userOk;
-                    }
-                    
-                    // default fallback roles
-                    if (item.roles) {
-                      return item.roles.includes(user.role) || isMasterAdmin;
-                    }
-                    
-                    return true;
-                  }).map((item, idx) => {
-                    // Localize item label if needed
-                    const itemLabel = shopSettings?.systemLanguage === 'bn' ? (item.label_bn || item.label) : item.label;
-                    const localizedItem = { ...item, label: itemLabel };
-                    return (
-                     <SidebarNavItem 
-                      key={item.id} 
-                      item={localizedItem} 
-                      idx={idx} 
-                      activeTab={activeTab} 
-                      setActiveTab={setActiveTab} 
-                      setIsSidebarOpen={setIsSidebarOpen} 
-                      isDesktop={isDesktop} 
-                      user={user}
-                      isMasterAdmin={isMasterAdmin}
-                      shopSettings={shopSettings}
-                    />
-                    );
-                  })}
+                <div key={group.id} className="space-y-1 mb-4">
+                  <button
+                    onClick={() => toggleSectionCollapse(group.id)}
+                    className="w-full flex items-center justify-between px-4 py-2 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-50/50 dark:hover:bg-slate-800/20 rounded-xl transition-all cursor-pointer group/sec outline-none"
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className={`w-1.5 h-1.5 rounded-full ${groupTheme.accent} opacity-60 group-hover/sec:opacity-100 group-hover/sec:scale-125 transition-transform`} />
+                      <span>{sectionLabel}</span>
+                      {visibleItemsCount > 0 && (
+                        <span className="ml-1 px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[9px] font-bold text-gray-400 dark:text-slate-500 group-hover/sec:bg-indigo-50 dark:group-hover/sec:bg-indigo-950/40 group-hover/sec:text-indigo-600 dark:group-hover/sec:text-indigo-400 transition-colors font-mono">
+                          {visibleItemsCount}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-gray-400 dark:text-slate-600 group-hover/sec:text-indigo-500 transition-transform duration-200">
+                      {isCollapsed ? (
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      ) : (
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      )}
+                    </span>
+                  </button>
+
+                  <AnimatePresence initial={false}>
+                    {!isCollapsed && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden space-y-1"
+                      >
+                        {groupItemsFiltered.map((item, idx) => {
+                          // Localize item label if needed
+                          const itemLabel = shopSettings?.systemLanguage === 'bn' ? (item.label_bn || item.label) : item.label;
+                          const localizedItem = { ...item, label: itemLabel };
+                          return (
+                           <SidebarNavItem 
+                            key={item.id} 
+                            item={localizedItem} 
+                            idx={idx} 
+                            activeTab={activeTab} 
+                            setActiveTab={setActiveTab} 
+                            setIsSidebarOpen={setIsSidebarOpen} 
+                            isDesktop={isDesktop} 
+                            user={user}
+                            isMasterAdmin={isMasterAdmin}
+                            shopSettings={shopSettings}
+                          />
+                          );
+                        })}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               );
             })}

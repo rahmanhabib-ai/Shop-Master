@@ -1,0 +1,37 @@
+{
+  "appId": "com.shopmaster.pos",
+  "productName": "ShopMaster",
+  "publish": {
+    "provider": "github",
+    "owner": "Stratprollc",
+    "repo": "Shop-Master"
+  },
+  "directories": {
+    "output": "dist-desktop"
+  },
+  "files": [
+    "dist/**/*",
+    "electron/**/*",
+    "package.json",
+    "public/**/*",
+    "firebase-applet-config.json"
+  ],
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      }
+    ],
+    "icon": "public/logo.svg"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "ShopMaster POS Sync"
+  }
+}

@@ -4478,6 +4478,37 @@ export function AdminSidebarPages({ shopSettings = {}, user = {}, setNotificatio
     };
 
     setSections(prev => {
+      const isSameSection = targetSectionId === sectionId;
+      const isSameParent = targetParentPageId === (parentPageId || 'none');
+
+      if (isSameSection && isSameParent) {
+        return prev.map(s => {
+          if (s.id !== sectionId) return s;
+          
+          if (!parentPageId) {
+            // Replace in top-level items
+            return {
+              ...s,
+              items: (s.items || []).map((item: any) => item.id === page.id ? pageToSave : item)
+            };
+          } else {
+            // Replace in subItems
+            return {
+              ...s,
+              items: (s.items || []).map((item: any) => {
+                if (item.id === parentPageId && item.subItems) {
+                  return {
+                    ...item,
+                    subItems: item.subItems.map((sub: any) => sub.id === page.id ? pageToSave : sub)
+                  };
+                }
+                return item;
+              })
+            };
+          }
+        });
+      }
+
       // 1. Remove from previous section/parent location
       const cleaned = prev.map(s => {
         if (s.id !== sectionId) return s;
@@ -4997,8 +5028,8 @@ export function AdminSidebarPages({ shopSettings = {}, user = {}, setNotificatio
                                         <Settings className="w-3.5 h-3.5" />
                                       </button>
 
-                                      {/* Add Sub-Page Button (if container tab dashboard) */}
-                                      {item.id.endsWith('_dashboard') && (
+                                      {/* Add Sub-Page Button */}
+                                      {true && (
                                         <button 
                                           onClick={() => setAddingPage({ sectionId: section.id, parentPageId: item.id })}
                                           className="p-1 text-gray-400 hover:text-emerald-600 rounded-lg cursor-pointer"
@@ -5490,10 +5521,12 @@ export function AdminSidebarPages({ shopSettings = {}, user = {}, setNotificatio
                     </select>
                   </div>
 
-                  {/* Optional Parent Page Selection (Only if target section has any container dashboard pages) */}
+                   {/* Optional Parent Page Selection */}
                   {(() => {
                     const targetSec = sections.find((s: any) => s.id === (editingPage.targetSectionId || editingPage.sectionId));
-                    const potentialParents = targetSec ? (targetSec.items || []).filter((item: any) => item.id.endsWith('_dashboard')) : [];
+                    const potentialParents = targetSec 
+                      ? (targetSec.items || []).filter((item: any) => item.id !== editingPage.page.id) 
+                      : [];
                     if (potentialParents.length === 0) return null;
 
                     return (
@@ -5669,10 +5702,10 @@ export function AdminSidebarPages({ shopSettings = {}, user = {}, setNotificatio
                     </select>
                   </div>
 
-                  {/* Optional Parent Page Selector */}
+                   {/* Optional Parent Page Selector */}
                   {(() => {
                     const targetSec = sections.find((s: any) => s.id === addingPage.sectionId);
-                    const potentialParents = targetSec ? (targetSec.items || []).filter((item: any) => item.id.endsWith('_dashboard')) : [];
+                    const potentialParents = targetSec ? (targetSec.items || []) : [];
                     if (potentialParents.length === 0) return null;
 
                     return (
