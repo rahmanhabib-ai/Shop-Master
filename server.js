@@ -1,4 +1,4 @@
-// Hostinger Entrypoint v1.0.4 - CommonJS Engine for Phusion Passenger (Auto-Build & Fail-Safe Server)
+// Hostinger Entrypoint v1.0.5 - CommonJS Engine for Phusion Passenger (Auto-Build & Fail-Safe Server)
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
