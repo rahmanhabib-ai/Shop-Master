@@ -2800,4 +2800,6 @@ async function startServer() {
   });
 }
 
-startServer();
+startServer().catch((err) => {
+  console.error('[Server Error] Unhandled error starting server:', err);
+});
