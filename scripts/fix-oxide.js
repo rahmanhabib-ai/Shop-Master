@@ -1,8 +1,5 @@
-import { execSync } from 'child_process';
-import { createRequire } from 'module';
-import fs from 'fs';
-
-const require = createRequire(import.meta.url);
+const { execSync } = require('child_process');
+const fs = require('fs');
 
 try {
   // Try loading @tailwindcss/oxide
