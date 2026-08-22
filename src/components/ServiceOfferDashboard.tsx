@@ -160,6 +160,11 @@ export default function ServiceOfferDashboard({ user, settings, setNotification 
           },
           gatewayConfig: {
             default_route: 'whatsapp',
+            waGatewayType: (settings as any).waGatewayType || 'baileys',
+            meta_phone_number_id: (settings as any).meta_phone_number_id || (settings as any).metaPhoneNumberId || '',
+            meta_access_token: (settings as any).meta_access_token || (settings as any).metaAccessToken || '',
+            meta_waba_id: (settings as any).meta_waba_id || (settings as any).metaWabaId || '',
+            baileys_phone: (settings as any).baileys_phone || (settings as any).baileysPhone || '',
             zender_api_key: (settings as any).waLinkSecret || settings.zender_api_key || (settings as any).waToken || '4fe17fcfe73d5035f55b9144fa10e07443659005',
             zender_whatsapp_device_id: settings.zender_whatsapp_device_id || settings.zender_device_id || '',
             zender_endpoint_url: 'https://app.sellerscampus.com/api/v1'
@@ -529,6 +534,11 @@ export default function ServiceOfferDashboard({ user, settings, setNotification 
         },
         gatewayConfig: {
           default_route: 'whatsapp',
+          waGatewayType: (settings as any).waGatewayType || 'baileys',
+          meta_phone_number_id: (settings as any).meta_phone_number_id || (settings as any).metaPhoneNumberId || '',
+          meta_access_token: (settings as any).meta_access_token || (settings as any).metaAccessToken || '',
+          meta_waba_id: (settings as any).meta_waba_id || (settings as any).metaWabaId || '',
+          baileys_phone: (settings as any).baileys_phone || (settings as any).baileysPhone || '',
           zender_api_key: (settings as any).waLinkSecret || settings.zender_api_key || (settings as any).waToken || '4fe17fcfe73d5035f55b9144fa10e07443659005',
           zender_whatsapp_device_id: settings.zender_whatsapp_device_id || settings.zender_device_id || '',
           zender_endpoint_url: 'https://app.sellerscampus.com/api/v1'

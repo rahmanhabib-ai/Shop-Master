@@ -329,7 +329,7 @@ export const JarvisAI: React.FC<JarvisAIProps> = ({ onClose, shopId, systemData,
 
   // Removed toggleLanguage as per user request to manage it via settings panel instead
 
-  const handleVoiceCommandRef = useRef<(command: string) => void>();
+  const handleVoiceCommandRef = useRef<(command: string) => void>(undefined);
 
   const isStartingRef = useRef(false);
 

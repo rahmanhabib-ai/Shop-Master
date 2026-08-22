@@ -559,11 +559,11 @@ export const PageManagement: React.FC<PageManagementProps> = ({
 
             {/* Tap Items */}
             {[
-              { id: 'community', label: isBn ? 'কমিউনিটি হাব' : 'Community Hub', icon: Users, color: 'text-blue-500 border-blue-100 bg-blue-50/40 dark:bg-blue-950/20' },
-              { id: 'livetv', label: isBn ? 'লাইভ টিভি' : 'Live TV Broadcast', icon: Tv, color: 'text-rose-500 border-rose-100 bg-rose-50/40 dark:bg-rose-950/20' },
-              { id: 'contact', label: isBn ? 'যোগাযোগ পৃষ্ঠা' : 'Contact Support Inbox', icon: Phone, color: 'text-emerald-500 border-emerald-100 bg-emerald-50/40 dark:bg-emerald-950/20' },
-              { id: 'release', label: isBn ? 'রিলিজ সংস্করণ' : 'App Releases & Notes', icon: FileText, color: 'text-amber-500 border-amber-100 bg-amber-50/40 dark:bg-amber-950/20' },
-              { id: 'mail', label: isBn ? 'ব্যবসায়িক মেইল' : 'Business Newsletter', icon: Mail, color: 'text-indigo-500 border-indigo-100 bg-indigo-50/40 dark:bg-indigo-950/20' },
+              { id: 'community', label: isBn ? 'কমিউনিটি হাব' : 'Community Hub', icon: Users, color: 'text-blue-500 bg-blue-50/60 dark:bg-blue-950/30' },
+              { id: 'livetv', label: isBn ? 'লাইভ টিভি' : 'Live TV Broadcast', icon: Tv, color: 'text-rose-500 bg-rose-50/60 dark:bg-rose-950/30' },
+              { id: 'contact', label: isBn ? 'যোগাযোগ পৃষ্ঠা' : 'Contact Support Inbox', icon: Phone, color: 'text-emerald-500 bg-emerald-50/60 dark:bg-emerald-950/30' },
+              { id: 'release', label: isBn ? 'রিলিজ সংস্করণ' : 'App Releases & Notes', icon: FileText, color: 'text-amber-500 bg-amber-50/60 dark:bg-amber-950/30' },
+              { id: 'mail', label: isBn ? 'ব্যবসায়িক মেইল' : 'Business Newsletter', icon: Mail, color: 'text-indigo-500 bg-indigo-50/60 dark:bg-indigo-950/30' },
             ].map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -571,16 +571,16 @@ export const PageManagement: React.FC<PageManagementProps> = ({
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl text-xs font-bold transition-all text-left ${
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all text-left cursor-pointer group ${
                     isActive 
-                      ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-100 dark:shadow-none' 
-                      : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800/50'
+                      ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-xs shadow-indigo-600/25 translate-x-0.5' 
+                      : 'text-gray-700 dark:text-slate-300 hover:bg-gray-100/70 dark:hover:bg-slate-800/60 hover:text-gray-950 dark:hover:text-white hover:translate-x-0.5'
                   }`}
                 >
-                  <div className={`p-1.5 rounded-xl transition-all ${isActive ? 'bg-white/20 text-white' : tab.color}`}>
+                  <div className={`p-1.5 rounded-lg transition-all ${isActive ? 'bg-white/20 text-white' : tab.color}`}>
                     <Icon className="w-4 h-4" />
                   </div>
-                  <span className="flex-1 truncate">{tab.label}</span>
+                  <span className="flex-1 truncate tracking-tight">{tab.label}</span>
                 </button>
               );
             })}
@@ -1262,6 +1262,11 @@ export const PageManagement: React.FC<PageManagementProps> = ({
                                       },
                                       gatewayConfig: {
                                         default_route: 'whatsapp',
+                                        waGatewayType: (shopSettings as any)?.waGatewayType || 'baileys',
+                                        meta_phone_number_id: (shopSettings as any)?.meta_phone_number_id || (shopSettings as any)?.metaPhoneNumberId || '',
+                                        meta_access_token: (shopSettings as any)?.meta_access_token || (shopSettings as any)?.metaAccessToken || '',
+                                        meta_waba_id: (shopSettings as any)?.meta_waba_id || (shopSettings as any)?.metaWabaId || '',
+                                        baileys_phone: (shopSettings as any)?.baileys_phone || (shopSettings as any)?.baileysPhone || '',
                                         zender_api_key: (shopSettings as any)?.waLinkSecret || (shopSettings as any)?.zender_api_key || (shopSettings as any)?.waToken || '4fe17fcfe73d5035f55b9144fa10e07443659005',
                                         zender_whatsapp_device_id: (shopSettings as any)?.zender_whatsapp_device_id || (shopSettings as any)?.zender_device_id || '',
                                         zender_endpoint_url: 'https://app.sellerscampus.com/api/v1'

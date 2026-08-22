@@ -111,7 +111,6 @@ import {
   BarChart3,
   Smartphone,
   Pill,
-  Truck,
   Monitor as MonitorIcon,
   Landmark,
   Lock,
@@ -2136,8 +2135,13 @@ const callWhatsAppApi = async (phone: string, message: string, settings: ShopSet
           customerPhone: formattedPhone,
           message: message
         },
-          gatewayConfig: {
+        gatewayConfig: {
           default_route: 'whatsapp',
+          waGatewayType: (settings as any).waGatewayType || 'baileys',
+          meta_phone_number_id: (settings as any).meta_phone_number_id || (settings as any).metaPhoneNumberId || '',
+          meta_access_token: (settings as any).meta_access_token || (settings as any).metaAccessToken || '',
+          meta_waba_id: (settings as any).meta_waba_id || (settings as any).metaWabaId || '',
+          baileys_phone: (settings as any).baileys_phone || (settings as any).baileysPhone || '',
           zender_api_key: (settings as any).waLinkSecret || (settings as any).zender_api_key || settings.waToken || '4fe17fcfe73d5035f55b9144fa10e07443659005',
           zender_whatsapp_device_id: settings.waInstanceId || (settings as any).zender_whatsapp_device_id || (settings as any).zender_device_id || '',
           zender_endpoint_url: 'https://app.sellerscampus.com/api/v1'
@@ -4332,180 +4336,7 @@ function ShopManagement({ shops }: { shops: any[] }) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
-            >
-              <motion.div 
-                initial={{ scale: 0.95, opacity: 0, y: 20 }}
-                animate={{ scale: 1, opacity: 1, y: 0 }}
-                exit={{ scale: 0.95, opacity: 0, y: 20 }}
-                className="bg-white w-full max-w-2xl rounded-[32px] p-6 md:p-8 shadow-2xl border border-slate-100 max-h-[85vh] overflow-y-auto"
-              >
-                <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-                  <div className="flex items-center gap-3 text-indigo-600">
-                    <Navigation className="w-8 h-8 text-indigo-500 animate-pulse" />
-                    <div className="text-left">
-                      <h2 className="text-xl font-black text-slate-800 leading-none">Security Geofence Audit</h2>
-                      <p className="text-[10px] text-indigo-500 font-bold uppercase tracking-widest mt-1">
-                        Locating & Matching Logs for: <strong className="text-slate-900">{inspectingShopLocation.name}</strong>
-                      </p>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => setInspectingShopLocation(null)}
-                    className="p-2 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
-                  >
-                    <X className="w-5 h-5 text-gray-400" />
-                  </button>
-                </div>
-
-                <div className="mt-6 space-y-6">
-                  {/* Side by side comparison cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-1.5 text-left">
-                      <span className="text-[9px] font-black uppercase tracking-wider text-gray-400">Onboarding Physical Address:</span>
-                      <p className="text-xs font-bold text-slate-700 flex gap-1.5 leading-relaxed">
-                        <Building2 className="w-4 h-4 text-slate-450 flex-shrink-0 mt-0.5" />
-                        <span>{inspectingShopLocation.address || 'No address specified'}</span>
-                      </p>
-                    </div>
-                    
-                    <div className="p-4 rounded-2xl bg-indigo-50/50 border border-indigo-100 space-y-1.5 text-left relative overflow-hidden">
-                      <span className="text-[9px] font-black uppercase tracking-wider text-indigo-500">Last Tracked GPS Location:</span>
-                      <p className="text-xs font-bold text-slate-700 flex gap-1.5 leading-relaxed">
-                        <MapPin className="w-4 h-4 text-indigo-500 flex-shrink-0 mt-0.5" />
-                        <span>{inspectingShopLocation.lastTrackedAddress || 'No geo footprints captured'}</span>
-                      </p>
-                      {inspectingShopLocation.lastTrackedLat && (
-                        <div className="pt-2 flex items-center justify-between">
-                          <span className="text-[9px] font-mono text-indigo-600 font-bold bg-white px-2 py-0.5 rounded border border-indigo-100">
-                            Lat: {inspectingShopLocation.lastTrackedLat.toFixed(6)}, Lon: {inspectingShopLocation.lastTrackedLon.toFixed(6)}
-                          </span>
-                          <a
-                            href={`https://www.google.com/maps/search/?api=1&query=${inspectingShopLocation.lastTrackedLat},${inspectingShopLocation.lastTrackedLon}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[9px] uppercase tracking-wider py-1.5 px-3 rounded-lg flex items-center gap-1 transition-all shadow-md shadow-indigo-100 cursor-pointer"
-                          >
-                            <Globe className="w-3.5 h-3.5" />
-                            <span>View on Google Map</span>
-                          </a>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Complete timeline of tracking log history */}
-                  <div className="space-y-3 text-left">
-                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
-                      <History className="w-4 h-4 text-slate-400" />
-                      <span>Chronological Verification History</span>
-                    </h3>
-
-                    {inspectingShopLocation.locationHistory && inspectingShopLocation.locationHistory.length > 0 ? (
-                      <div className="border border-slate-100 rounded-2xl overflow-hidden max-h-[300px] overflow-y-auto shadow-sm">
-                        <table className="w-full text-left border-collapse">
-                          <thead>
-                            <tr className="bg-slate-50 border-b border-slate-100">
-                              <th className="px-4 py-3 text-[10px] font-black uppercase text-gray-400">Date/Time</th>
-                              <th className="px-4 py-3 text-[10px] font-black uppercase text-gray-400">Account Checked</th>
-                              <th className="px-4 py-3 text-[10px] font-black uppercase text-gray-400">Accuracy</th>
-                              <th className="px-4 py-3 text-[10px] font-black uppercase text-gray-400">Address Trace Result</th>
-                              <th className="px-4 py-3 text-[10px] font-black uppercase text-gray-400">Admin Note</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {inspectingShopLocation.locationHistory.map((item: any, hIdx: number) => (
-                              <tr key={hIdx} className="border-b border-slate-50 text-xs hover:bg-slate-50/40">
-                                <td className="px-4 py-3 font-medium whitespace-nowrap text-gray-500 font-mono">
-                                  {new Date(item.timestamp).toLocaleString()}
-                                </td>
-                                <td className="px-4 py-3">
-                                  <p className="font-bold text-slate-800 leading-none">{item.displayName}</p>
-                                  <p className="text-[9px] text-slate-400 font-mono mt-0.5">{item.email}</p>
-                                </td>
-                                <td className="px-4 py-3 font-mono text-[10px] whitespace-nowrap text-indigo-600">
-                                  <span className="font-bold">{item.latitude.toFixed(5)}, {item.longitude.toFixed(5)}</span>
-                                  <span className="block text-[8px] text-gray-400 italic">Acc: ±{item.accuracy ? Math.round(item.accuracy) : 0}m</span>
-                                </td>
-                                <td className="px-4 py-3 text-slate-600 text-[10.5px] leading-relaxed max-w-[200px] truncate" title={item.address}>
-                                  {item.address}
-                                </td>
-                                <td className="px-4 py-3 w-[250px]">
-                                  {editingNoteIndex === hIdx ? (
-                                    <div className="flex items-center gap-2">
-                                      <input 
-                                        type="text" 
-                                        className="w-full text-[10px] px-2 py-1 border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                        placeholder="Add note..."
-                                        value={noteValue}
-                                        onChange={(e) => setNoteValue(e.target.value)}
-                                        autoFocus
-                                      />
-                                      <button 
-                                        onClick={() => handleSaveNote(inspectingShopLocation.id, inspectingShopLocation.locationHistory, hIdx)}
-                                        className="p-1 bg-emerald-50 text-emerald-600 rounded hover:bg-emerald-100"
-                                        title="Save Note"
-                                      >
-                                        <Check className="w-3.5 h-3.5" />
-                                      </button>
-                                      <button 
-                                        onClick={() => setEditingNoteIndex(null)}
-                                        className="p-1 bg-rose-50 text-rose-600 rounded hover:bg-rose-100"
-                                        title="Cancel"
-                                      >
-                                        <X className="w-3.5 h-3.5" />
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <div className="flex items-center justify-between group">
-                                      <span className="text-[10px] text-slate-600 truncate max-w-[180px]" title={item.note || 'No note'}>
-                                        {item.note || <span className="text-slate-300 italic">No note</span>}
-                                      </span>
-                                      <button 
-                                        onClick={() => {
-                                          setEditingNoteIndex(hIdx);
-                                          setNoteValue(item.note || '');
-                                        }}
-                                        className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all"
-                                        title="Edit Note"
-                                      >
-                                        <Pencil className="w-3.5 h-3.5" />
-                                      </button>
-                                    </div>
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : (
-                      <div className="py-8 text-center border-2 border-dashed border-gray-100 rounded-2xl">
-                        <p className="text-xs font-semibold text-gray-400">No login geofence records found for this shop.</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mt-8 pt-4 border-t border-slate-100 flex items-center justify-end">
-                  <button 
-                    onClick={() => setInspectingShopLocation(null)}
-                    className="px-6 py-2.5 bg-slate-900 hover:bg-slate-850 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-md cursor-pointer"
-                  >
-                    Done
-                  </button>
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-
-          {/* Status Notification Modal */}
-          {statusNotification && (
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
+                            className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
             >
               <motion.div 
                 initial={{ scale: 0.95, opacity: 0, y: 20 }}
@@ -4590,11 +4421,11 @@ export const DEFAULT_SIDEBAR_SECTIONS = [
     isDeleted: false,
     visibleToRoles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team', 'warehouse'],
     items: [
-      {
-        id: 'inventory_dashboard',
-        label: 'Inventory Dashboard',
-        label_bn: 'ইনভেন্টরি ড্যাশবোর্ড',
-        iconName: 'LayoutDashboard',
+      { 
+        id: 'inventory_dashboard', 
+        label: 'Inventory Dashboard', 
+        label_bn: 'ইনভেন্টরি ড্যাশবোর্ড', 
+        iconName: 'LayoutDashboard', 
         roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team', 'warehouse'],
         subItems: [
           { id: 'inventory', label: 'Inventory', label_bn: 'ইনভেন্টরি তালিকা', iconName: 'Package', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] },
@@ -4615,24 +4446,16 @@ export const DEFAULT_SIDEBAR_SECTIONS = [
     isDeleted: false,
     visibleToRoles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'],
     items: [
-      {
-        id: 'sales_crm_dashboard',
-        label: 'Sales & CRM Dashboard',
-        label_bn: 'সেলস ড্যাশবোর্ড',
-        iconName: 'LayoutDashboard',
-        roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'],
-        subItems: [
-          { id: 'sales', label: 'Sales Records', label_bn: 'বিক্রয় রেকর্ড', iconName: 'History', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] },
-          { id: 'customers', label: 'Customers', label_bn: 'গ্রাহক তালিকা', iconName: 'Users', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] },
-          { id: 'branch_crm', label: 'Branch Sales & CRM', label_bn: 'শাখা সিআরএম', iconName: 'Building2', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] },
-          { id: 'customer_orders', label: 'Customer Orders', label_bn: 'গ্রাহক অর্ডার', iconName: 'ShoppingBag', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] },
-          { id: 'courier', label: 'Courier', label_bn: 'কুরিয়ার সার্ভিস', iconName: 'Truck', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] },
-          { id: 'warranty', label: 'Warranty', label_bn: 'ওয়ারেন্টি', iconName: 'ShieldCheck', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] },
-          { id: 'service_offer', label: 'Service', label_bn: 'সার্ভিস ও সেবা', iconName: 'Zap', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] },
-          { id: 'note', label: 'Note', label_bn: 'নোট ও মেমো', iconName: 'StickyNote', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] },
-          { id: 'recycle_bin', label: 'Recycle Bin', label_bn: 'রিসাইকেল বিন', iconName: 'Trash2', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] }
-        ]
-      }
+      { id: 'sales_crm_dashboard', label: 'Sales & CRM Dashboard', label_bn: 'সেলস ড্যাশবোর্ড', iconName: 'LayoutDashboard', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] },
+      { id: 'sales', label: 'Sales Records', label_bn: 'বিক্রয় রেকর্ড', iconName: 'History', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] },
+      { id: 'customers', label: 'Customers', label_bn: 'গ্রাহক তালিকা', iconName: 'Users', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] },
+      { id: 'branch_crm', label: 'Branch Sales & CRM', label_bn: 'শাখা সিআরএম', iconName: 'Building2', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] },
+      { id: 'customer_orders', label: 'Customer Orders', label_bn: 'গ্রাহক অর্ডার', iconName: 'ShoppingBag', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] },
+      { id: 'courier', label: 'Courier', label_bn: 'কুরিয়ার সার্ভিস', iconName: 'Truck', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] },
+      { id: 'warranty', label: 'Warranty', label_bn: 'ওয়ারেন্টি', iconName: 'ShieldCheck', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] },
+      { id: 'service_offer', label: 'Service', label_bn: 'সার্ভিস ও সেবা', iconName: 'Zap', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] },
+      { id: 'note', label: 'Note', label_bn: 'নোট ও মেমো', iconName: 'StickyNote', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] },
+      { id: 'recycle_bin', label: 'Recycle Bin', label_bn: 'রিসাইকেল বিন', iconName: 'Trash2', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] }
     ]
   },
   {
@@ -4643,17 +4466,9 @@ export const DEFAULT_SIDEBAR_SECTIONS = [
     isDeleted: false,
     visibleToRoles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'],
     items: [
-      {
-        id: 'accounting_dashboard',
-        label: 'Accounting Dashboard',
-        label_bn: 'হিসাব ড্যাশবোর্ড',
-        iconName: 'LayoutDashboard',
-        roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'],
-        subItems: [
-          { id: 'accounting', label: 'Hishab Nikash', label_bn: 'হিসাব নিকাশ', iconName: 'CalculatorIcon', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] },
-          { id: 'daily_closing', label: 'Daily Closing', label_bn: 'দৈনিক ক্লোজিং', iconName: 'Clock', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] }
-        ]
-      }
+      { id: 'accounting_dashboard', label: 'Accounting Dashboard', label_bn: 'হিসাব ড্যাশবোর্ড', iconName: 'LayoutDashboard', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] },
+      { id: 'accounting', label: 'Hishab Nikash', label_bn: 'হিসাব নিকাশ', iconName: 'CalculatorIcon', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] },
+      { id: 'daily_closing', label: 'Daily Closing', label_bn: 'দৈনিক ক্লোজিং', iconName: 'Clock', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] }
     ]
   },
   {
@@ -4664,22 +4479,14 @@ export const DEFAULT_SIDEBAR_SECTIONS = [
     isDeleted: false,
     visibleToRoles: ['admin', 'manager', 'assistant_manager'],
     items: [
-      {
-        id: 'hrm_dashboard',
-        label: 'HRM Dashboard',
-        label_bn: 'এইচআরএম ড্যাশবোর্ড',
-        iconName: 'LayoutDashboard',
-        roles: ['admin', 'manager', 'assistant_manager'],
-        subItems: [
-          { id: 'staff_directory', label: 'Staff Directory', label_bn: 'স্টাফ ডিরেক্টরি', iconName: 'Users', roles: ['admin', 'manager', 'assistant_manager'] },
-          { id: 'attendance_tracker', label: 'Attendance & Shifts', label_bn: 'উপস্থিতি ও শিফট', iconName: 'CheckSquare', roles: ['admin', 'manager', 'assistant_manager'] },
-          { id: 'payroll_disbursal', label: 'Payroll & Salaries', label_bn: 'বেতন ও স্যালারি', iconName: 'Banknote', roles: ['admin', 'manager', 'assistant_manager'] },
-          { id: 'leave_planner', label: 'Leave & Holidays', label_bn: 'ছুটি ও হলিডে', iconName: 'Calendar', roles: ['admin', 'manager', 'assistant_manager'] },
-          { id: 'system_login', label: 'System Login', label_bn: 'সিস্টেম লগইন', iconName: 'ShieldCheck', roles: ['admin', 'manager', 'assistant_manager'] },
-          { id: 'employment_contracts', label: 'Contracts & Releases', label_bn: 'চুক্তিপত্র ও রিলিজ', iconName: 'FileText', roles: ['admin', 'manager', 'assistant_manager'] },
-          { id: 'hrm_settings', label: 'HRM Settings', label_bn: 'এইচআর সেটিংস', iconName: 'Settings', roles: ['admin', 'manager', 'assistant_manager'] }
-        ]
-      }
+      { id: 'hrm_dashboard', label: 'HRM Dashboard', label_bn: 'এইচআরএম ড্যাশবোর্ড', iconName: 'LayoutDashboard', roles: ['admin', 'manager', 'assistant_manager'] },
+      { id: 'staff_directory', label: 'Staff Directory', label_bn: 'স্টাফ ডিরেক্টরি', iconName: 'Users', roles: ['admin', 'manager', 'assistant_manager'] },
+      { id: 'attendance_tracker', label: 'Attendance & Shifts', label_bn: 'উপস্থিতি ও শিফট', iconName: 'CheckSquare', roles: ['admin', 'manager', 'assistant_manager'] },
+      { id: 'payroll_disbursal', label: 'Payroll & Salaries', label_bn: 'বেতন ও স্যালারি', iconName: 'Banknote', roles: ['admin', 'manager', 'assistant_manager'] },
+      { id: 'leave_planner', label: 'Leave & Holidays', label_bn: 'ছুটি ও হলিডে', iconName: 'Calendar', roles: ['admin', 'manager', 'assistant_manager'] },
+      { id: 'system_login', label: 'System Login', label_bn: 'সিস্টেম লগইন', iconName: 'ShieldCheck', roles: ['admin', 'manager', 'assistant_manager'] },
+      { id: 'employment_contracts', label: 'Contracts & Releases', label_bn: 'চুক্তিপত্র ও রিলিজ', iconName: 'FileText', roles: ['admin', 'manager', 'assistant_manager'] },
+      { id: 'hrm_settings', label: 'HRM Settings', label_bn: 'এইচআর সেটিংস', iconName: 'Settings', roles: ['admin', 'manager', 'assistant_manager'] }
     ]
   },
   {
@@ -4690,21 +4497,13 @@ export const DEFAULT_SIDEBAR_SECTIONS = [
     isDeleted: false,
     visibleToRoles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'],
     items: [
-      {
-        id: 'marketing_content',
-        label: 'Marketing Content',
-        label_bn: 'মার্কেটিং কনটেন্ট',
-        iconName: 'LayoutDashboard',
-        roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'],
-        subItems: [
-          { id: 'content_plan', label: 'Content Plan', label_bn: 'কনটেন্ট প্ল্যান', iconName: 'FileText', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] },
-          { id: 'hook_generator', label: 'Hook Generator', label_bn: 'হুক জেনারেটর', iconName: 'Link', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] },
-          { id: 'visual_hook_pro', label: 'Visual Hook Pro', label_bn: 'ভিজ্যুয়াল হুক প্রো', iconName: 'ImageIcon', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] },
-          { id: 'content_writer_pro', label: 'Content Writer Pro', label_bn: 'কনটেন্ট রাইটার প্রো', iconName: 'FileEdit', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] },
-          { id: 'story_maker', label: 'Story Maker (OVC)', label_bn: 'স্টোরি মেকার ওভিসি', iconName: 'Video', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] },
-          { id: 'brand_memory', label: 'Brand Memory', label_bn: 'ব্র্যান্ড মেমোরি', iconName: 'Brain', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] }
-        ]
-      }
+      { id: 'marketing_content', label: 'Marketing Dashboard', label_bn: 'মার্কেটিং ড্যাশবোর্ড', iconName: 'LayoutDashboard', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] },
+      { id: 'content_plan', label: 'Content Plan', label_bn: 'কনটেন্ট প্ল্যান', iconName: 'FileText', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] },
+      { id: 'hook_generator', label: 'Hook Generator', label_bn: 'হুক জেনারেটর', iconName: 'Link', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] },
+      { id: 'visual_hook_pro', label: 'Visual Hook Pro', label_bn: 'ভিজ্যুয়াল হুক প্রো', iconName: 'ImageIcon', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] },
+      { id: 'content_writer_pro', label: 'Content Writer Pro', label_bn: 'কনটেন্ট রাইটার প্রো', iconName: 'FileEdit', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] },
+      { id: 'story_maker', label: 'Story Maker (OVC)', label_bn: 'স্টোরি মেকার ওভিসি', iconName: 'Video', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] },
+      { id: 'brand_memory', label: 'Brand Memory', label_bn: 'ব্র্যান্ড মেমোরি', iconName: 'Brain', roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team'] }
     ]
   },
   {
@@ -4715,32 +4514,24 @@ export const DEFAULT_SIDEBAR_SECTIONS = [
     isDeleted: false,
     visibleToRoles: ['admin'],
     items: [
-      {
-        id: 'management_dashboard',
-        label: 'Management Dashboard',
-        label_bn: 'ম্যানেজমেন্ট ড্যাশবোর্ড',
-        iconName: 'LayoutDashboard',
-        roles: ['admin'],
-        subItems: [
-          { id: 'membership', label: 'Membership', label_bn: 'মেম্বারশিপ', iconName: 'Award', roles: ['admin', 'manager'] },
-          { id: 'jarvis', label: 'Jarvis AI', label_bn: 'জারভিস এআই', iconName: 'Bot', roles: ['admin'] },
-          { id: 'payment_method', label: 'Payment Method', label_bn: 'পেমেন্ট মেথড', iconName: 'CreditCard', roles: ['admin'] },
-          { id: 'loan_management', label: 'Loan Management', label_bn: 'ঋণ ব্যবস্থাপনা', iconName: 'Banknote', roles: ['admin'] },
-          { id: 'community_hub', label: 'Community Hub', label_bn: 'কমিউনিটি হাব', iconName: 'Users', roles: ['admin'] },
-          { id: 'live_tv', label: 'Live TV', label_bn: 'লাইভ টিভি', iconName: 'Tv', roles: ['admin'] },
-          { id: 'business_bio', label: 'Business Bio', label_bn: 'বিজনেস বায়ো', iconName: 'User', roles: ['admin'] },
-          { id: 'contact_us', label: 'Contact Us', label_bn: 'যোগাযোগ করুন', iconName: 'Phone', roles: ['admin'] },
-          { id: 'business_mail', label: 'Business Mail', label_bn: 'বিজনেস মেইল', iconName: 'Mail', roles: ['admin'] },
-          { id: 'meet_scheduler', label: 'Meet Scheduler', label_bn: 'মিটিং সিডিউলার', iconName: 'Calendar', roles: ['admin'] },
-          { id: 'release_logs', label: 'Release Logs', label_bn: 'রিলিজ লগ', iconName: 'Activity', roles: ['admin'] },
+      { id: 'management_dashboard', label: 'Management Dashboard', label_bn: 'ম্যানেজমেন্ট ড্যাশবোর্ড', iconName: 'LayoutDashboard', roles: ['admin'] },
+      { id: 'membership', label: 'Membership', label_bn: 'মেম্বারশিপ', iconName: 'Award', roles: ['admin', 'manager'] },
+      { id: 'jarvis', label: 'Jarvis AI', label_bn: 'জারভিস এআই', iconName: 'Bot', roles: ['admin'] },
+      { id: 'payment_method', label: 'Payment Method', label_bn: 'পেমেন্ট মেথড', iconName: 'CreditCard', roles: ['admin'] },
+      { id: 'loan_management', label: 'Loan Management', label_bn: 'ঋণ ব্যবস্থাপনা', iconName: 'Banknote', roles: ['admin'] },
+      { id: 'community_hub', label: 'Community Hub', label_bn: 'কমিউনিটি হাব', iconName: 'Users', roles: ['admin'] },
+      { id: 'live_tv', label: 'Live TV', label_bn: 'লাইভ টিভি', iconName: 'Tv', roles: ['admin'] },
+      { id: 'business_bio', label: 'Business Bio', label_bn: 'বিজনেস বায়ো', iconName: 'User', roles: ['admin'] },
+      { id: 'contact_us', label: 'Contact Us', label_bn: 'যোগাযোগ করুন', iconName: 'Phone', roles: ['admin'] },
+      { id: 'business_mail', label: 'Business Mail', label_bn: 'বিজনেস মেইল', iconName: 'Mail', roles: ['admin'] },
+      { id: 'meet_scheduler', label: 'Meet Scheduler', label_bn: 'মিটিং সিডিউলার', iconName: 'Calendar', roles: ['admin'] },
+      { id: 'release_logs', label: 'Release Logs', label_bn: 'রিলিজ লগ', iconName: 'Activity', roles: ['admin'] },
           { id: 'settings', label: 'Settings', label_bn: 'সেটিংস', iconName: 'Settings', roles: ['admin'] },
           { id: 'online_shop', label: 'Online Shop', label_bn: 'অনলাইন শপ', iconName: 'Globe', roles: ['admin', 'manager', 'assistant_manager'] },
           { id: 'store_builder', label: 'Store Builder', label_bn: 'স্টোর বিল্ডার', iconName: 'LayoutTemplate', roles: ['admin', 'manager', 'assistant_manager'] },
           { id: 'messaging_gateway', label: 'Messaging Gateway', label_bn: 'মেসেজিং গেটওয়ে', iconName: 'MessageSquare', roles: ['admin', 'master_admin', 'dealer', 'salesman', 'staff', 'dsr', 'sales_partner', 'manager', 'assistant_manager', 'employee'] },
           { id: 'custom_domain', label: 'Custom Domain', label_bn: 'কাস্টম ডোমেইন', iconName: 'Globe', roles: ['admin', 'manager', 'assistant_manager', 'employee'] }
         ]
-      }
-    ]
   },
   {
     id: 'admin_dashboard_section',
@@ -4750,27 +4541,15 @@ export const DEFAULT_SIDEBAR_SECTIONS = [
     isDeleted: false,
     visibleToRoles: ['admin'],
     items: [
-      {
-        id: 'admin_dashboard',
-        label: 'Admin Panel',
-        label_bn: 'অ্যাডমিন ড্যাশবোর্ড',
-        iconName: 'Shield',
-        roles: ['admin'],
-        emailScope: 'stratproamz@gmail.com',
-        bg: 'bg-indigo-50',
-        color: 'text-indigo-600',
-        border: 'border-indigo-100',
-        subItems: [
-          { id: 'admin_homepage', label: 'Homepage', label_bn: 'হোমপেজ', iconName: 'Home', roles: ['admin'], emailScope: 'stratproamz@gmail.com', bg: 'bg-indigo-50', color: 'text-indigo-600' },
-          { id: 'admin_excalidraw', label: 'ExcaLidraw', label_bn: 'ড্রয়িং বোর্ড', iconName: 'PenTool', roles: ['admin'], emailScope: 'stratproamz@gmail.com', bg: 'bg-indigo-50', color: 'text-indigo-600' },
-          { id: 'admin_sidebar_pages', label: 'SideBar & Pages', label_bn: 'সাইডবার ও পেজ', iconName: 'Layers', roles: ['admin'], emailScope: 'stratproamz@gmail.com', bg: 'bg-indigo-50', color: 'text-indigo-600' },
-          { id: 'admin_merchant_console', label: 'Merchant Console', label_bn: 'কনসোল', iconName: 'Terminal', roles: ['admin'], emailScope: 'stratproamz@gmail.com', bg: 'bg-indigo-50', color: 'text-indigo-600' },
-          { id: 'admin_my_hisab', label: 'My HISAB', label_bn: 'হিসাব', iconName: 'CalculatorIcon', roles: ['admin'], emailScope: 'stratproamz@gmail.com', bg: 'bg-indigo-50', color: 'text-indigo-600' },
-          { id: 'admin_control', label: 'Control', label_bn: 'নিয়ন্ত্রণ', iconName: 'Sliders', roles: ['admin'], emailScope: 'stratproamz@gmail.com', bg: 'bg-indigo-50', color: 'text-indigo-600' },
-          { id: 'admin_contact_us', label: 'Contact us', label_bn: 'যোগাযোগ', iconName: 'Phone', roles: ['admin'], emailScope: 'stratproamz@gmail.com', bg: 'bg-indigo-50', color: 'text-indigo-600' },
-          { id: 'admin_google_analytics', label: 'Google Analytics', label_bn: 'গুগল অ্যানালিটিক্স', iconName: 'Globe', roles: ['admin'], emailScope: 'stratproamz@gmail.com', bg: 'bg-indigo-50', color: 'text-indigo-600' }
-        ]
-      }
+      { id: 'admin_dashboard', label: 'Admin Panel', label_bn: 'অ্যাডমিন ড্যাশবোর্ড', iconName: 'Shield', roles: ['admin'], emailScope: 'stratproamz@gmail.com', bg: 'bg-indigo-50', color: 'text-indigo-600', border: 'border-indigo-100' },
+      { id: 'admin_homepage', label: 'Homepage', label_bn: 'হোমপেজ', iconName: 'Home', roles: ['admin'], emailScope: 'stratproamz@gmail.com', bg: 'bg-indigo-50', color: 'text-indigo-600' },
+      { id: 'admin_excalidraw', label: 'ExcaLidraw', label_bn: 'ড্রয়িং বোর্ড', iconName: 'PenTool', roles: ['admin'], emailScope: 'stratproamz@gmail.com', bg: 'bg-indigo-50', color: 'text-indigo-600' },
+      { id: 'admin_sidebar_pages', label: 'SideBar & Pages', label_bn: 'সাইডবার ও পেজ', iconName: 'Layers', roles: ['admin'], emailScope: 'stratproamz@gmail.com', bg: 'bg-indigo-50', color: 'text-indigo-600' },
+      { id: 'admin_merchant_console', label: 'Merchant Console', label_bn: 'কনসোল', iconName: 'Terminal', roles: ['admin'], emailScope: 'stratproamz@gmail.com', bg: 'bg-indigo-50', color: 'text-indigo-600' },
+      { id: 'admin_my_hisab', label: 'My HISAB', label_bn: 'হিসাব', iconName: 'CalculatorIcon', roles: ['admin'], emailScope: 'stratproamz@gmail.com', bg: 'bg-indigo-50', color: 'text-indigo-600' },
+      { id: 'admin_control', label: 'Control', label_bn: 'নিয়ন্ত্রণ', iconName: 'Sliders', roles: ['admin'], emailScope: 'stratproamz@gmail.com', bg: 'bg-indigo-50', color: 'text-indigo-600' },
+      { id: 'admin_contact_us', label: 'Contact us', label_bn: 'যোগাযোগ', iconName: 'Phone', roles: ['admin'], emailScope: 'stratproamz@gmail.com', bg: 'bg-indigo-50', color: 'text-indigo-600' },
+      { id: 'admin_google_analytics', label: 'Google Analytics', label_bn: 'গুগল অ্যানালিটিক্স', iconName: 'Globe', roles: ['admin'], emailScope: 'stratproamz@gmail.com', bg: 'bg-indigo-50', color: 'text-indigo-600' }
     ]
   }
 ];
@@ -4919,72 +4698,35 @@ const getThemeByModule = (itemId: string) => {
 };
 
 const SidebarNavItem = ({ item, idx, activeTab, setActiveTab, setIsSidebarOpen, isDesktop, user, isMasterAdmin, shopSettings }: any) => {
-  const visibleSubItems = item.subItems 
-    ? item.subItems.filter((subItem: any) => {
-        // Super admin bypass
-        const userEmail = user?.email?.toLowerCase().trim();
-        if (userEmail === 'stratproamz@gmail.com') return true;
-
-        // Soft delete check
-        if (subItem.isDeleted) return false;
-
-        // Specific email scope
-        if (subItem.emailScope) return userEmail === subItem.emailScope.toLowerCase().trim();
-        
-        // Settings-based hidden modules
-        if (subItem.id === 'branch_crm' && shopSettings?.multiBranchEnabled === false) return false;
-        if (subItem.id === 'warehouse' && shopSettings?.warehouseEnabled === false) return false;
-        if (subItem.id === 'stock_transfer' && shopSettings?.warehouseEnabled === false) return false;
-        
-        // custom roles/emails visibilities
-        const hasAllowedRoles = subItem.allowedRoles && Array.isArray(subItem.allowedRoles);
-        const hasAllowedUsers = subItem.allowedUsers && Array.isArray(subItem.allowedUsers);
-        
-        if (hasAllowedRoles || hasAllowedUsers) {
-          const roleOk = hasAllowedRoles && subItem.allowedRoles.includes(user?.role);
-          const userOk = hasAllowedUsers && user?.email && subItem.allowedUsers.some((e: string) => e.toLowerCase().trim() === user.email.toLowerCase().trim());
-          return roleOk || userOk;
-        }
-
-        // default fallback roles
-        if (subItem.roles) {
-          return subItem.roles.includes(user?.role) || isMasterAdmin;
-        }
-        
-        return true;
-      })
-    : [];
-
-  const hasSubItems = visibleSubItems.length > 0;
-  const isChildActive = hasSubItems && visibleSubItems.some((s: any) => s.id === activeTab);
+  const hasSubItems = item.subItems && item.subItems.length > 0;
+  
+  // Is this item or any of its sub-items active?
   const isSelfActive = activeTab === item.id;
-  const isExpandedInitially = isSelfActive || isChildActive;
-  const [isExpanded, setIsExpanded] = useState(isExpandedInitially);
+  const isAnySubActive = hasSubItems && item.subItems.some((sub: any) => sub.id === activeTab);
+  const isItemActive = isSelfActive || isAnySubActive;
 
-  useEffect(() => {
-    if (isSelfActive || isChildActive) {
-      setIsExpanded(true);
-    }
-  }, [isSelfActive, isChildActive]);
+  const [isExpanded, setIsExpanded] = React.useState(() => {
+    return isAnySubActive;
+  });
 
-  const toggleExpand = (e: any) => {
-    e.stopPropagation();
-    setIsExpanded(!isExpanded);
-  };
+  const Icon = item.iconName && (LucideIcons as any)[item.iconName] ? (LucideIcons as any)[item.iconName] : LucideIcons.Circle;
+  const theme = getThemeByModule(item.id);
+  
+  const isBn = shopSettings?.systemLanguage === 'bn';
+  const label = isBn ? (item.label_bn || item.label) : item.label;
 
   const handleClick = () => {
-    if (hasSubItems && !isSelfActive) {
-        setIsExpanded(true);
-    } else if (hasSubItems && isSelfActive) {
-        setIsExpanded(!isExpanded);
+    if (hasSubItems) {
+      setIsExpanded(!isExpanded);
+      setActiveTab(item.id); // Parent acts as its own dashboard
+    } else {
+      setActiveTab(item.id);
     }
-    setActiveTab(item.id);
     if (!isDesktop && !hasSubItems) {
       setIsSidebarOpen(false);
     }
   };
 
-  const theme = getThemeByModule(item.id);
   const bgClass = item.bg || theme.bg;
   const colorClass = item.color || theme.color;
   const borderClass = item.border || theme.border;
@@ -5020,27 +4762,38 @@ const SidebarNavItem = ({ item, idx, activeTab, setActiveTab, setIsSidebarOpen, 
         whileHover={{ x: 4, scale: 1.005 }}
         whileTap={{ scale: 0.99 }}
         onClick={handleClick}
-        className={`w-full flex items-center justify-between group px-3 py-2.5 rounded-xl transition-all duration-300 relative overflow-hidden outline-none ${
-          isSelfActive                
-            ? `${bgClass} dark:bg-indigo-950/30 ${colorClass} shadow-sm ring-1 ${borderClass} font-bold` 
+        className={`w-full flex items-center justify-between group px-3 py-2.5 rounded-xl transition-all duration-500 relative overflow-hidden outline-none ${
+          isItemActive                
+            ? `bg-slate-900 dark:bg-black text-white shadow-[0_0_15px_rgba(99,102,241,0.2)] ring-1 ring-slate-800 dark:ring-white/10 font-bold transform scale-[1.02]` 
             : 'text-gray-500 dark:text-gray-400 hover:bg-slate-50/70 dark:hover:bg-slate-800/40 hover:text-gray-900 dark:hover:text-gray-100 border border-transparent'
         }`}
       >
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 dark:via-white/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out"></div>
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 dark:via-white/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out z-0"></div>
+        
+        {isItemActive && (
+          <>
+            <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-indigo-500/10 animate-pulse opacity-70 z-0"></div>
+            <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-400/20 via-transparent to-transparent opacity-50 z-0"></div>
+          </>
+        )}
+
         <div className="flex items-center justify-between gap-2.5 relative z-10 w-full">
           <div className="flex items-center gap-2.5">
-            <div className={`p-2 rounded-lg transition-all duration-300 shadow-sm ${
-              isSelfActive 
-                ? 'bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-800 shadow-sm' 
+            <div className={`p-2 rounded-lg transition-all duration-300 shadow-sm relative overflow-hidden ${
+              isItemActive 
+                ? 'bg-slate-800/80 dark:bg-slate-900/80 border border-slate-700/50 dark:border-slate-800/50 shadow-inner' 
                 : theme.iconInactive
             }`}>
-              <item.icon className={`w-4 h-4 transition-transform duration-300 group-hover:scale-110 ${
-                isSelfActive ? `${colorClass} dark:text-indigo-400` : ''
+              {isItemActive && (
+                 <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 animate-pulse"></div>
+              )}
+              <Icon className={`w-4 h-4 transition-transform duration-300 group-hover:scale-110 relative z-10 ${
+                isItemActive ? `text-indigo-400 dark:text-indigo-400 drop-shadow-[0_0_8px_rgba(99,102,241,0.8)]` : ''
               }`} />
             </div>
             <span className={`text-[12.5px] font-bold tracking-tight transition-colors duration-300 ${
-              isSelfActive ? '' : `group-hover:${colorClass}`
-            }`}>{item.label}</span>
+              isItemActive ? 'text-white drop-shadow-md' : `group-hover:${colorClass}`
+            }`}>{label}</span>
             
             {/* Version Badge for How To Use */}
             {item.id === 'how_to_use' && (
@@ -5058,12 +4811,12 @@ const SidebarNavItem = ({ item, idx, activeTab, setActiveTab, setIsSidebarOpen, 
             )}
           </div>
           {hasSubItems && (
-            <div onClick={toggleExpand} className="p-1 rounded-md hover:bg-black/5 dark:hover:bg-white/10 transition-colors ml-2 z-20 flex items-center justify-center">
-               <ChevronRight className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-300 ${isExpanded ? 'rotate-90' : ''}`} />
+            <div className="flex items-center shrink-0">
+              <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
             </div>
           )}
         </div>
-        {isSelfActive && (
+        {isItemActive && !hasSubItems && (
           <motion.div 
             layoutId="active-indicator"
             className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-r-full ${theme.accent}`}
@@ -5071,48 +4824,54 @@ const SidebarNavItem = ({ item, idx, activeTab, setActiveTab, setIsSidebarOpen, 
         )}
       </motion.button>
       
+      {/* Sub-items rendering */}
       {hasSubItems && (
-        <AnimatePresence>
+        <AnimatePresence initial={false}>
           {isExpanded && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden space-y-0.5 mt-1 ml-[1.1rem] pl-3 border-l border-slate-150 dark:border-slate-800/80"
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden mt-1 space-y-1 ml-4 pl-3 border-l-2 border-indigo-100/50 dark:border-indigo-900/30"
             >
-               {visibleSubItems.map((subItem: any, subIdx: number) => {
-                  const isSubActive = activeTab === subItem.id;
-                  const isSubLocked = PREMIUM_ONLY_IDS.includes(subItem.id) && !isPremiumUnlocked;
-                  const subTheme = getThemeByModule(subItem.id);
-                  return (
-                    <motion.button 
-                       key={subItem.id} 
-                       initial={{ opacity: 0, x: -8 }}
-                       animate={{ opacity: 1, x: 0 }}
-                       transition={{ delay: subIdx * 0.03 }}
-                       onClick={() => { 
-                         setActiveTab(subItem.id); 
-                         if(!isDesktop) setIsSidebarOpen(false); 
-                       }} 
-                       className={`w-full flex items-center justify-between px-3 py-2 rounded-lg transition-all duration-200 text-[12px] font-bold tracking-wide relative group/sub ${
-                         isSubActive 
-                           ? `${subTheme.bg} ${subTheme.color} dark:bg-slate-800/80 border-l-2 border-indigo-500` 
-                           : 'text-gray-500 hover:text-gray-900 hover:bg-slate-50/60 dark:hover:bg-slate-800/20 dark:text-gray-400 dark:hover:text-gray-100'
-                       }`}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <div className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
-                          isSubActive ? `${subTheme.accent} scale-125 shadow-sm` : 'bg-slate-300 dark:bg-slate-700 group-hover/sub:bg-indigo-400'
-                        }`} />
-                        <span className="truncate">{subItem.label}</span>
-                      </div>
+              {item.subItems.map((sub: any, subIdx: number) => {
+                const isSubActive = activeTab === sub.id;
+                const SubIcon = sub.iconName && (LucideIcons as any)[sub.iconName] ? (LucideIcons as any)[sub.iconName] : LucideIcons.Circle;
+                const subLabel = isBn ? (sub.label_bn || sub.label) : sub.label;
+                const subTheme = getThemeByModule(sub.id);
 
-                      {isSubLocked && (
-                        <Lock className="w-3 h-3 text-amber-500 shrink-0 ml-1.5" />
+                return (
+                  <button
+                    key={sub.id}
+                    onClick={() => {
+                      setActiveTab(sub.id);
+                      if (!isDesktop) setIsSidebarOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-500 group relative overflow-hidden ${
+                      isSubActive 
+                        ? 'bg-slate-900 dark:bg-black shadow-[0_0_12px_rgba(99,102,241,0.2)] text-white font-bold ring-1 ring-slate-800 dark:ring-white/10 transform scale-[1.02]' 
+                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-slate-50/50 dark:hover:bg-slate-800/30'
+                    }`}
+                  >
+                    {isSubActive && (
+                      <>
+                        <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-indigo-500/10 animate-pulse opacity-70 z-0"></div>
+                        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-400/20 via-transparent to-transparent opacity-50 z-0"></div>
+                      </>
+                    )}
+                    <div className={`p-1.5 rounded-lg transition-colors relative z-10 overflow-hidden ${
+                      isSubActive ? 'bg-slate-800/80 dark:bg-slate-900/80 border border-slate-700/50 dark:border-slate-800/50 shadow-inner' : 'group-hover:bg-slate-100 dark:group-hover:bg-slate-800'
+                    }`}>
+                      {isSubActive && (
+                         <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 animate-pulse z-0"></div>
                       )}
-                    </motion.button>
-                  );
-               })}
+                      <SubIcon className={`w-3.5 h-3.5 relative z-10 ${isSubActive ? 'text-indigo-400 drop-shadow-[0_0_8px_rgba(99,102,241,0.8)]' : 'text-gray-400 group-hover:text-gray-600'}`} />
+                    </div>
+                    <span className={`text-[11.5px] font-bold tracking-tight relative z-10 ${isSubActive ? 'text-white drop-shadow-md' : ''}`}>{subLabel}</span>
+                  </button>
+                );
+              })}
             </motion.div>
           )}
         </AnimatePresence>
@@ -8998,30 +8757,53 @@ export default function App() {
 
   // Dynamic Sidebar Items Loader from settings or defaults
   const sidebarItems = useMemo(() => {
-    const configSections = shopSettings?.sidebarConfig?.sections || DEFAULT_SIDEBAR_SECTIONS;
+    let configSections = shopSettings?.sidebarConfig?.sections || DEFAULT_SIDEBAR_SECTIONS;
+    
+    // Auto-migrate flat inventory section to nested structure
+    configSections = configSections.map((sec: any) => {
+      if (sec.id === 'inventory_section') {
+        const hasNested = sec.items.some((i: any) => i.id === 'inventory_dashboard' && i.subItems && i.subItems.length > 0);
+        if (!hasNested) {
+          const inventoryItemsIds = ['inventory', 'warehouse', 'supplier', 'barcode', 'damage_expire', 'stock_transfer'];
+          const subItemsToNest = sec.items.filter((i: any) => inventoryItemsIds.includes(i.id));
+          const otherItems = sec.items.filter((i: any) => !inventoryItemsIds.includes(i.id) && i.id !== 'inventory_dashboard');
+          
+          if (subItemsToNest.length > 0) {
+            return {
+              ...sec,
+              items: [
+                { 
+                  id: 'inventory_dashboard', 
+                  label: 'Inventory Dashboard', 
+                  label_bn: 'ইনভেন্টরি ড্যাশবোর্ড', 
+                  iconName: 'LayoutDashboard', 
+                  roles: ['admin', 'manager', 'assistant_manager', 'sales_manager', 'sales_team', 'warehouse'],
+                  subItems: subItemsToNest
+                },
+                ...otherItems
+              ]
+            };
+          }
+        }
+      }
+      return sec;
+    });
     
     return configSections.map((sec: any) => {
-      const mappedItems = (sec.items || []).map((item: any) => {
-        const iconComponent = LucideIcons[item.iconName] || LucideIcons.FileText;
-        
-        let mappedSubItems = undefined;
-        if (item.subItems) {
-          mappedSubItems = item.subItems.map((sub: any) => ({
-            ...sub,
-            icon: LucideIcons[sub.iconName] || LucideIcons.FileText
-          }));
-        }
-        
+      const parsedItems = (sec.items || []).map((item: any) => {
         return {
           ...item,
-          icon: iconComponent,
-          subItems: mappedSubItems
+          icon: (LucideIcons as any)[item.iconName] || LucideIcons.FileText,
+          subItems: item.subItems && Array.isArray(item.subItems) ? item.subItems.map((sub: any) => ({
+            ...sub,
+            icon: (LucideIcons as any)[sub.iconName] || LucideIcons.FileText
+          })) : undefined
         };
       });
       
       return {
         ...sec,
-        items: mappedItems
+        items: parsedItems
       };
     });
   }, [shopSettings]);
@@ -9033,17 +8815,15 @@ export default function App() {
       return { isLocked: false, title: '', message: '' };
     }
     
-    const configSections = shopSettings?.sidebarConfig?.sections || DEFAULT_SIDEBAR_SECTIONS;
-    
-    for (const group of configSections) {
+    for (const group of sidebarItems) {
       if (group.isDeleted) continue;
       
-      // Section is locked
       const isSecLocked = group.isLocked;
       
       for (const item of (group.items || [])) {
         if (item.isDeleted) continue;
         
+        // Check main item
         if (item.id === activeTab) {
           if (isSecLocked) {
             return {
@@ -9061,7 +8841,8 @@ export default function App() {
           }
         }
         
-        if (item.subItems) {
+        // Check sub-items
+        if (item.subItems && Array.isArray(item.subItems)) {
           for (const sub of item.subItems) {
             if (sub.isDeleted) continue;
             
@@ -9073,18 +8854,11 @@ export default function App() {
                   message: shopSettings?.customLockMessage || (shopSettings?.systemLanguage === 'bn' ? 'দুঃখিত, এই সেকশনটি বর্তমানে অ্যাডমিন কর্তৃক লক করা রয়েছে!' : 'Sorry, this section is currently locked by the administrator.')
                 };
               }
-              if (item.isLocked) {
-                return {
-                  isLocked: true,
-                  title: shopSettings?.systemLanguage === 'bn' ? (item.label_bn || item.label) : item.label,
-                  message: shopSettings?.customLockMessage || (shopSettings?.systemLanguage === 'bn' ? 'দুঃখিত, এই পেজটি বর্তমানে অ্যাডমিন কর্তৃক লক করা রয়েছে!' : 'Sorry, this page is currently locked by the administrator.')
-                };
-              }
-              if (sub.isLocked) {
+              if (sub.isLocked || item.isLocked) {
                 return {
                   isLocked: true,
                   title: shopSettings?.systemLanguage === 'bn' ? (sub.label_bn || sub.label) : sub.label,
-                  message: shopSettings?.customLockMessage || (shopSettings?.systemLanguage === 'bn' ? 'দুঃখিত, এই সাব-পেজটি বর্তমানে অ্যাডমিন কর্তৃক লক করা রয়েছে!' : 'Sorry, this sub-page is currently locked by the administrator.')
+                  message: shopSettings?.customLockMessage || (shopSettings?.systemLanguage === 'bn' ? 'দুঃখিত, এই পেজটি বর্তমানে অ্যাডমিন কর্তৃক লক করা রয়েছে!' : 'Sorry, this page is currently locked by the administrator.')
                 };
               }
             }
@@ -9094,7 +8868,7 @@ export default function App() {
     }
     
     return { isLocked: false, title: '', message: '' };
-  }, [shopSettings, activeTab, user?.email]);
+  }, [sidebarItems, activeTab, shopSettings, user?.email]);
 
   // Public document verification bypass
   const publicVerifyDocId = new URLSearchParams(window.location.search).get('verifyDoc');
@@ -9925,14 +9699,6 @@ export default function App() {
                     <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 mt-1 uppercase tracking-widest">Business Suite</span>
                   </div>
                 </div>
-                
-                <button 
-                  onClick={() => setIsSidebarOpen(false)}
-                  className="p-2 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-xl transition-all text-gray-400 hover:text-rose-600 border border-transparent hover:border-rose-100"
-                  title="Hide Sidebar"
-                >
-                  <ChevronLeft className={`w-5 h-5 transition-transform ${isRtl ? 'rotate-180' : ''}`} />
-                </button>
               </div>
 
           <nav className="flex-1 px-4 py-6 overflow-y-auto custom-scrollbar space-y-1.5 bg-white dark:bg-slate-900" id="main-navigation-menu">
@@ -9970,7 +9736,7 @@ export default function App() {
                 if (item.subItems && item.subItems.some(sub => sub.id === activeTab)) return true;
                 return false;
               });
-              const isCollapsed = !!collapsedSections[group.id] && !isSectionActive;
+              const isCollapsed = false; // Sections are now always expanded and cannot be collapsed.
               
               const groupItemsFiltered = group.items.filter(item => {
                 const userEmail = user?.email?.toLowerCase().trim();
@@ -9995,38 +9761,15 @@ export default function App() {
               });
               const visibleItemsCount = groupItemsFiltered.length;
               const groupTheme = getThemeByModule(group.id || (group.items[0]?.id || ''));
-
               return (
-                <div key={group.id} className="space-y-1 mb-4">
-                  <button
-                    onClick={() => toggleSectionCollapse(group.id)}
-                    className="w-full flex items-center justify-between px-4 py-2 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-50/50 dark:hover:bg-slate-800/20 rounded-xl transition-all cursor-pointer group/sec outline-none"
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className={`w-1.5 h-1.5 rounded-full ${groupTheme.accent} opacity-60 group-hover/sec:opacity-100 group-hover/sec:scale-125 transition-transform`} />
-                      <span>{sectionLabel}</span>
-                      {visibleItemsCount > 0 && (
-                        <span className="ml-1 px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[9px] font-bold text-gray-400 dark:text-slate-500 group-hover/sec:bg-indigo-50 dark:group-hover/sec:bg-indigo-950/40 group-hover/sec:text-indigo-600 dark:group-hover/sec:text-indigo-400 transition-colors font-mono">
-                          {visibleItemsCount}
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-gray-400 dark:text-slate-600 group-hover/sec:text-indigo-500 transition-transform duration-200">
-                      {isCollapsed ? (
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      ) : (
-                        <ChevronDown className="w-3.5 h-3.5" />
-                      )}
-                    </span>
-                  </button>
-
+                <div key={group.id} className="mb-4">
                   <AnimatePresence initial={false}>
                     {!isCollapsed && (
                       <motion.div
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
-                        className="overflow-hidden space-y-1"
+                        className="space-y-1"
                       >
                         {groupItemsFiltered.map((item, idx) => {
                           // Localize item label if needed
@@ -10055,99 +9798,33 @@ export default function App() {
             })}
           </nav>
 
-          <div className="p-4 border-t border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-[0_-10px_20px_rgba(0,0,0,0.02)]">
-            <div className="flex items-center gap-3 p-3 bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 rounded-2xl mb-4 group cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors">
-              <div className="w-11 h-11 bg-white dark:bg-slate-800 p-0.5 rounded-xl border border-indigo-100 dark:border-indigo-900/40 shadow-sm overflow-hidden flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-black text-lg group-hover:scale-105 transition-transform">
-                {(user.displayName || user.email || 'A')[0].toUpperCase()}
+          <div className="p-3 border-t border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+            <div className="flex items-center justify-between p-2.5 bg-gray-50/80 dark:bg-slate-800/80 border border-gray-100 dark:border-slate-800 rounded-2xl group transition-colors hover:bg-gray-100 dark:hover:bg-slate-800">
+              <div className="flex items-center gap-2.5 overflow-hidden">
+                <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold text-base shadow-sm shrink-0">
+                  {(user.displayName || user.email || 'A')[0].toUpperCase()}
+                </div>
+                <div className="overflow-hidden">
+                  <div id="sidebar-user-displayname" className="font-bold text-xs text-gray-900 dark:text-white truncate leading-tight">
+                    {user.displayName || user.email?.split('@')[0] || 'Administrator'}
+                  </div>
+                  <div className="text-[10px] text-gray-500 dark:text-gray-400 font-medium truncate uppercase tracking-wider mt-0.5">
+                    {isMasterAdmin ? 'Master Admin' : user.role || 'Admin'}
+                  </div>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <p id="sidebar-user-displayname" className="text-[13px] font-bold text-gray-900 dark:text-slate-100 truncate leading-tight">{user.displayName || user.email?.split('@')[0] || 'Administrator'}</p>
-                <p className="text-[10px] font-bold text-indigo-500 dark:text-indigo-400 truncate uppercase mt-0.5 tracking-wider">{user.role}</p>
-              </div>
+              
+              {/* Compact Logout Icon Button */}
+              <motion.button 
+                whileHover={{ scale: 1.08 }}
+                whileTap={{ scale: 0.92 }}
+                onClick={handleLogout}
+                className="p-2 text-rose-500 hover:text-white hover:bg-rose-500 dark:hover:bg-rose-600 rounded-xl transition-all border border-transparent hover:border-rose-500 shadow-none hover:shadow-xs cursor-pointer shrink-0 ml-1.5"
+                title={st('logout') || 'Logout'}
+              >
+                <LogOut className="w-4 h-4" />
+              </motion.button>
             </div>
-            <motion.button 
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => {
-                window.dispatchEvent(new CustomEvent('open-calculator'));
-                if (!isDesktop) {
-                  setIsSidebarOpen(false);
-                }
-              }}
-              className="w-full flex items-center justify-center gap-3 py-3 mb-2 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-slate-800 dark:to-slate-900 hover:from-indigo-600 hover:to-purple-700 dark:hover:from-indigo-600 dark:hover:to-indigo-700 hover:text-white text-indigo-700 dark:text-indigo-300 rounded-xl transition-all font-bold text-sm border border-indigo-100/50 dark:border-slate-800 shadow-sm"
-            >
-              <CalculatorIcon className="w-5 h-5" />
-              {shopSettings.systemLanguage === 'bn' ? 'ক্যালকুলেটর (Calculator)' : 'Open Calculator'}
-            </motion.button>
-            <motion.button 
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => {
-                if (!isFullScreen) {
-                  document.documentElement.requestFullscreen().catch(() => {});
-                } else {
-                  document.exitFullscreen().catch(() => {});
-                }
-              }}
-              className="w-full flex items-center justify-center gap-3 py-3 mb-2 text-indigo-600 dark:text-indigo-400 hover:text-white hover:bg-indigo-600 dark:hover:bg-indigo-600 rounded-xl transition-all font-bold text-sm border border-indigo-100 dark:border-slate-800 hover:border-indigo-600 dark:hover:border-indigo-600 shadow-sm"
-            >
-              {isFullScreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
-              {isFullScreen ? st('fullScreenOff') : st('fullScreenOn')}
-            </motion.button>
-            <motion.button 
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => setDarkMode(!darkMode)}
-              className="w-full flex items-center justify-center gap-3 py-3 mb-2 text-indigo-650 dark:text-indigo-400 hover:text-white hover:bg-indigo-600 dark:hover:bg-indigo-600 rounded-xl transition-all font-bold text-sm border border-indigo-100 dark:border-slate-800 hover:border-indigo-600 dark:hover:border-indigo-600 shadow-sm"
-            >
-              {darkMode ? <Sun className="w-5 h-5 text-amber-500 animate-spin-slow" /> : <Moon className="w-5 h-5 text-indigo-400" />}
-              {darkMode ? (shopSettings.systemLanguage === 'bn' ? 'লাইট মোড (Light Mode)' : 'Light Mode') : (shopSettings.systemLanguage === 'bn' ? 'ডার্ক মোড (Dark Mode)' : 'Dark Mode')}
-            </motion.button>
-            
-            {/* Update Test Simulator Button */}
-            <motion.button 
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => {
-                setUpdateStatus({ type: 'checking', isSimulated: true });
-                setNotification({ message: 'সিমুলেশন: আপডেট চেক করা হচ্ছে...', type: 'info' });
-                
-                setTimeout(() => {
-                  setUpdateStatus({ type: 'available', version: '2.5.0', isSimulated: true });
-                  setNotification({ message: 'সিমুলেশন: নতুন সংস্করণ পাওয়া গেছে (v2.5.0)', type: 'success' });
-                  
-                  setTimeout(() => {
-                    let percent = 0;
-                    setUpdateStatus({ type: 'progress', percent: 0, isSimulated: true });
-                    
-                    const interval = setInterval(() => {
-                      percent += 10;
-                      if (percent >= 100) {
-                        clearInterval(interval);
-                        setUpdateStatus({ type: 'downloaded', version: '2.5.0', isSimulated: true });
-                        setNotification({ message: 'সিমুলেশন: আপডেট ডাউনলোড সম্পন্ন হয়েছে!', type: 'success' });
-                      } else {
-                        setUpdateStatus({ type: 'progress', percent, isSimulated: true });
-                      }
-                    }, 250);
-                  }, 1500);
-                }, 2000);
-              }}
-              className="w-full flex items-center justify-center gap-3 py-3 mb-2 text-indigo-600 dark:text-indigo-400 hover:text-white hover:bg-gradient-to-r hover:from-cyan-500 hover:via-purple-500 hover:to-pink-500 rounded-xl transition-all font-bold text-sm border border-indigo-100 dark:border-slate-800 shadow-sm cursor-pointer"
-            >
-              <LucideIcons.RefreshCw className="w-5 h-5 text-indigo-500 dark:text-indigo-400" />
-              {shopSettings.systemLanguage === 'bn' ? 'আপডেট টেস্ট সিমুলেটর' : 'Simulate Update'}
-            </motion.button>
-
-            <motion.button 
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={handleLogout}
-              className="w-full flex items-center justify-center gap-3 py-3 text-red-500 hover:text-white hover:bg-red-500 rounded-xl transition-all font-bold text-sm border border-red-100 dark:border-slate-800 hover:border-red-500 shadow-sm"
-            >
-              <LogOut className="w-5 h-5" />
-              {st('logout')}
-            </motion.button>
           </div>
         </aside>
         <main className="flex-1 transition-all duration-300 p-4 lg:p-8 overflow-x-hidden relative bg-white dark:bg-slate-950">
@@ -10370,6 +10047,23 @@ export default function App() {
                   </div>
                 </div>
 
+                {/* Compact Light / Dark Mode Toggle Icon */}
+                <button
+                  onClick={() => setDarkMode(!darkMode)}
+                  className={`p-2 rounded-xl transition-all border shadow-sm flex items-center justify-center cursor-pointer ${
+                    darkMode
+                      ? 'bg-slate-900 border-amber-500/30 text-amber-400 hover:bg-amber-950/30 hover:border-amber-400 hover:text-amber-300 shadow-amber-950/20'
+                      : 'bg-white border-indigo-100 text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-300'
+                  }`}
+                  title={darkMode ? (shopSettings?.systemLanguage === 'bn' ? 'লাইট মোড চালু করুন (Light Mode)' : 'Switch to Light Mode') : (shopSettings?.systemLanguage === 'bn' ? 'ডার্ক মোড চালু করুন (Dark Mode)' : 'Switch to Dark Mode')}
+                >
+                  {darkMode ? (
+                    <Sun className="w-4 h-4 text-amber-400 animate-spin-slow transition-transform hover:scale-110" />
+                  ) : (
+                    <Moon className="w-4 h-4 text-slate-700 transition-transform hover:scale-110 hover:text-indigo-600" />
+                  )}
+                </button>
+
                 {/* Fullscreen Toggle Button in Header */}
                 <button
                   onClick={() => {
@@ -10510,7 +10204,7 @@ export default function App() {
               transition={{ duration: 0.2 }}
               className="w-full flex-1 flex flex-col animate-fadeIn"
             >
-              {activeBranchId === 'all' && shopSettings?.multiBranchEnabled !== false && !['dashboard', 'how_to_use', 'membership', 'release_logs', 'main_admin', 'shops', 'settings', 'recycle_bin', 'live_tv'].includes(activeTab) ? (
+              {activeBranchId === 'all' && shopSettings?.multiBranchEnabled !== false && !['dashboard', 'inventory_dashboard', 'sales_crm_dashboard', 'accounting_dashboard', 'management_dashboard', 'how_to_use', 'membership', 'release_logs', 'main_admin', 'shops', 'settings', 'recycle_bin', 'live_tv'].includes(activeTab) ? (
                 <div className="flex-1 flex items-center justify-center p-6 bg-slate-50 dark:bg-slate-900/50 min-h-[500px]">
                   <motion.div 
                     initial={{ scale: 0.95, opacity: 0 }}
@@ -10580,7 +10274,7 @@ export default function App() {
 
                   {PREMIUM_ONLY_IDS.includes(activeTab) && !isPremiumUnlocked && (
                     <PremiumLockScreen 
-                      title={sidebarItems.flatMap(g => g.items.flatMap(i => i.subItems ? i.subItems : [i])).find(i => i.id === activeTab)?.label || 'Premium Feature'} 
+                      title={sidebarItems.flatMap((g: any) => g.items.flatMap((i: any) => i.subItems ? [i, ...i.subItems] : [i])).find((i: any) => i.id === activeTab)?.label || 'Premium Feature'} 
                       description="This module requires a Premium Membership plan to access."
                       onNavigateToMembership={() => setActiveTab('membership')} 
                     />
@@ -10800,7 +10494,7 @@ export default function App() {
                 }}
               />
             )}
-            {activeTab === 'inventory_dashboard' && <PlaceholderView title="Inventory Dashboard" />}
+            
             {activeTab === 'damage_expire' && <PlaceholderView title="Damage / Expire" />}
             {activeTab === 'stock_transfer' && <PlaceholderView title="Stock Transfer" />}
             {activeTab === 'sales_crm_dashboard' && <PlaceholderView title="Sales & CRM Dashboard" />}

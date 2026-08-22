@@ -265,7 +265,7 @@ export default function MembershipPage({ shopSettings, user, onRefreshSettings, 
                 return (
                   <div
                     key={key}
-                    onClick={() => setSelectedDuration(key)}
+                    onClick={() => setSelectedDuration(key as any)}
                     className={`relative cursor-pointer transition-all duration-300 rounded-2xl p-5 border text-left flex flex-col justify-between h-48 group overflow-hidden ${
                       isSelected
                         ? 'border-indigo-600 dark:border-indigo-400 bg-indigo-50/20 dark:bg-indigo-950/20 ring-1 ring-indigo-500 shadow-md'

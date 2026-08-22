@@ -218,7 +218,7 @@ export function AdminExcalidraw() {
   const [historyIndex, setHistoryIndex] = useState(0);
 
   // App Settings
-  const [tool, setTool] = useState<'select' | 'pan' | 'pen' | 'line' | 'arrow' | 'rect' | 'diamond' | 'circle' | 'text' | 'eraser'>('pen');
+  const [tool, setTool] = useState<'select' | 'pan' | 'pen' | 'line' | 'arrow' | 'rect' | 'diamond' | 'circle' | 'text' | 'eraser' | 'image'>('pen');
   const [color, setColor] = useState('#4f46e5');
   const [fillColor, setFillColor] = useState('transparent');
   const [fillStyle, setFillStyle] = useState<'none' | 'solid' | 'semi' | 'hachure'>('none');
@@ -1105,6 +1105,12 @@ export function AdminExcalidraw() {
     const screenY = e.clientY - rect.top;
     const world = screenToWorld(screenX, screenY);
 
+    if (tool === 'pan' || e.button === 1 || (tool === 'select' && e.shiftKey)) {
+      setAction('panning');
+      setDragStart({ x: e.clientX, y: e.clientY });
+      return;
+    }
+
     if (tool === 'select') {
       // 1. Check resize handle clicks
       if (selectedElementId) {
@@ -1134,9 +1140,6 @@ export function AdminExcalidraw() {
         setSelectedElementId(null);
         setAction('none');
       }
-    } else if (tool === 'pan' || e.button === 1 || (tool === 'select' && e.shiftKey)) {
-      setAction('panning');
-      setDragStart({ x: e.clientX, y: e.clientY });
     } else if (tool === 'eraser') {
       const clickedEl = getElementAtPosition(world.x, world.y);
       if (clickedEl) {
@@ -4210,7 +4213,7 @@ export function AdminSidebarPages({ shopSettings = {}, user = {}, setNotificatio
   
   // Modals / Editors state
   const [editingSection, setEditingSection] = useState<any | null>(null);
-  const [editingPage, setEditingPage] = useState<{ page: any; sectionId: string; parentPageId?: string } | null>(null);
+  const [editingPage, setEditingPage] = useState<{ page: any; sectionId: string; parentPageId?: string; targetSectionId?: string; targetParentPageId?: string } | null>(null);
   const [addingSection, setAddingSection] = useState(false);
   const [addingPage, setAddingPage] = useState<{ sectionId: string; parentPageId?: string } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'section' | 'page'; sectionId: string; pageId?: string; label: string } | null>(null);
@@ -4324,7 +4327,7 @@ export function AdminSidebarPages({ shopSettings = {}, user = {}, setNotificatio
     if (setNotification) setNotification({ type: 'success', message: 'সেকশন তথ্য সাময়িকভাবে আপডেট হয়েছে! পরিবর্তনগুলো সেভ করতে নিচে "Layout সেভ করুন" চাপুন।' });
   };
 
-  const handleCreateSection = (e: React.FormEvent) => {
+  const handleCreateSection = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const id = (e.currentTarget.elements.namedItem('secId') as HTMLInputElement).value.trim().toLowerCase();
     const label = (e.currentTarget.elements.namedItem('secLabel') as HTMLInputElement).value.trim();
@@ -5930,7 +5933,7 @@ function ReviewModeratorConsole() {
   const [shopsMap, setShopsMap] = useState<Record<string, { shopCode?: string; name?: string }>>({});
   const [loading, setLoading] = useState(true);
   const [filterRating, setFilterRating] = useState<number | 'all'>('all');
-  const [filterApproved, setFilterApproved] = useState<'all' | 'approved' | 'pending'>('all');
+  const [filterApproved, setFilterApproved] = useState<'all' | 'approved' | 'pending' | 'declined'>('all');
   const [notif, setNotif] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   useEffect(() => {

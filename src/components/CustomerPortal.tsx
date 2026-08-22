@@ -620,7 +620,7 @@ Rules:
 
   // Auto-select shop if exact match is entered or scanned
   useEffect(() => {
-    if (stage === 'shop_select' && searchShopQuery.trim().length >= 4) {
+    if (stage === 'shop_selection' && searchShopQuery.trim().length >= 4) {
       const queryRaw = searchShopQuery.trim().toLowerCase();
       const numericQuery = queryRaw.replace(/^shp-/, '').replace(/[^0-9]/g, '');
       const exactMatch = shops.find((s: any) => {
@@ -794,6 +794,11 @@ We will contact you shortly to confirm your order. Thank you!`;
             shopId,
             gatewayConfig: {
               default_route: 'whatsapp',
+              waGatewayType: (selectedShop as any).waGatewayType || 'baileys',
+              meta_phone_number_id: (selectedShop as any).meta_phone_number_id || (selectedShop as any).metaPhoneNumberId || '',
+              meta_access_token: (selectedShop as any).meta_access_token || (selectedShop as any).metaAccessToken || '',
+              meta_waba_id: (selectedShop as any).meta_waba_id || (selectedShop as any).metaWabaId || '',
+              baileys_phone: (selectedShop as any).baileys_phone || (selectedShop as any).baileysPhone || '',
               zender_whatsapp_device_id: activeDeviceId,
               zender_api_key: activeApiKey,
               endpoint_url: 'https://app.sellerscampus.com/api/v1'
@@ -1140,10 +1145,12 @@ We will contact you shortly to confirm your order. Thank you!`;
           <span className="bg-amber-600 text-white text-[9px] uppercase font-black px-2 py-0.5 rounded-sm shrink-0 animate-pulse tracking-wider">
             {isBn ? "সতর্কবার্তা" : "Warning Notice"}
           </span>
+          {/* @ts-ignore */}
           <marquee className="flex-1 font-bold text-xs" scrollamount="4" behavior="scroll" direction="left">
             {isBn 
               ? "পণ্যের দাম বাজার অনুযায়ী কম-বেশি হতে পারে এবং সব প্রোডাক্টের পর্যাপ্ত স্টক সবসময় নাও থাকতে পারে। দোকানদার চাইলে যেকোনো নির্দিষ্ট প্রোডাক্টের দাম পরিবর্তন করতে পারবেন, অথবা প্রোডাক্ট স্টক না থাকলে অর্ডারটি বাতিল (ক্যানসেল) করতে পারবেন।"
               : "Product prices are subject to change and stock availability may vary. The merchant reserves the right to adjust prices or cancel items/orders if they are unavailable."}
+          {/* @ts-ignore */}
           </marquee>
         </div>
       </div>

@@ -7027,7 +7027,7 @@ CRITICAL INSTRUCTIONS:
                   {printLayoutMode === 'digital' && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '20px', borderTop: '1px dashed #e2e8f0', paddingTop: '10px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontFamily: "'Inter', sans-serif", zIndex: 10, textAlign: 'left' }}>
-                        <div style={{ width: '38px', height: '38px', border: '1px solid #1e293b', padding: '1px', display: 'flex', alignItems: 'center', justify: 'center', background: 'white' }}>
+                        <div style={{ width: '38px', height: '38px', border: '1px solid #1e293b', padding: '1px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'white' }}>
                           <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`${window.location.origin}/?verifyDoc=${currentDocId}`)}`} style={{ width: '34px', height: '34px' }} />
                         </div>
                         <div style={{ textAlign: 'left', lineHeight: '1.1' }}>
@@ -7254,7 +7254,7 @@ CRITICAL INSTRUCTIONS:
                           value={formData.salary === undefined || formData.salary === null || isNaN(Number(formData.salary)) ? '' : formData.salary}
                           onChange={e => {
                             const val = e.target.value;
-                            setFormData({ ...formData, salary: val === '' ? '' : (parseInt(val, 10) || 0) });
+                            setFormData({ ...formData, salary: val === '' ? 0 : (parseInt(val, 10) || 0) });
                           }}
                         />
                       </div>
@@ -7273,7 +7273,7 @@ CRITICAL INSTRUCTIONS:
                           value={formData.tadAllowance === undefined || formData.tadAllowance === null || isNaN(Number(formData.tadAllowance)) ? '' : formData.tadAllowance}
                           onChange={e => {
                             const val = e.target.value;
-                            setFormData({ ...formData, tadAllowance: val === '' ? '' : (parseInt(val, 10) || 0) });
+                            setFormData({ ...formData, tadAllowance: val === '' ? 0 : (parseInt(val, 10) || 0) });
                           }}
                         />
                       </div>
@@ -7292,7 +7292,7 @@ CRITICAL INSTRUCTIONS:
                           value={formData.foodAllowance === undefined || formData.foodAllowance === null || isNaN(Number(formData.foodAllowance)) ? '' : formData.foodAllowance}
                           onChange={e => {
                             const val = e.target.value;
-                            setFormData({ ...formData, foodAllowance: val === '' ? '' : (parseInt(val, 10) || 0) });
+                            setFormData({ ...formData, foodAllowance: val === '' ? 0 : (parseInt(val, 10) || 0) });
                           }}
                         />
                       </div>
@@ -7311,7 +7311,7 @@ CRITICAL INSTRUCTIONS:
                           value={formData.hraAllowance === undefined || formData.hraAllowance === null || isNaN(Number(formData.hraAllowance)) ? '' : formData.hraAllowance}
                           onChange={e => {
                             const val = e.target.value;
-                            setFormData({ ...formData, hraAllowance: val === '' ? '' : (parseInt(val, 10) || 0) });
+                            setFormData({ ...formData, hraAllowance: val === '' ? 0 : (parseInt(val, 10) || 0) });
                           }}
                         />
                       </div>

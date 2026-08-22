@@ -327,6 +327,7 @@ const CommentNode: React.FC<{
               onDelete={onDelete}
               onReact={onReact}
               onEdit={onEdit}
+              onViewProfile={onViewProfile}
             />
           ))}
         </div>

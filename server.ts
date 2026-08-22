@@ -4,14 +4,19 @@ import fs from 'fs';
 import { GoogleGenAI } from "@google/genai";
 import { initializeApp as initServerFirebase } from 'firebase/app';
 import { getFirestore as getServerFirestore, collection as getServerCollection, getDocs as getServerDocs, query as getServerQuery, where as getServerWhere, doc as getServerDoc, getDoc as getServerDocSnap } from 'firebase/firestore';
+import { 
+  initBaileys, 
+  getSessionState, 
+  sendBaileysMessage, 
+  disconnectBaileys, 
+  autoResumeExistingBaileysSessions 
+} from './server/baileysManager';
 
 async function startServer() {
   const app = express();
   // If process.env.PORT is a string (like a Unix socket path in Hostinger/Passenger), we must pass it directly.
   // If it's a numeric string, we parse it as an integer.
-  const PORT = process.env.PORT && !isNaN(Number(process.env.PORT))
-    ? parseInt(process.env.PORT, 10)
-    : (process.env.PORT || 3000);
+  const PORT = 3000;
   
   // Initialize server-side firebase
   let firebaseApp: any = null;
@@ -34,7 +39,6 @@ async function startServer() {
   }
   
   app.use((req, res, next) => {
-    console.log(`[HTTP Request] ${req.method} ${req.url}`);
     const isWcWebhook = req.path.toLowerCase() === '/api/integrations/woocommerce' || req.path.toLowerCase() === '/api/integrations/woocommerce/';
     if (isWcWebhook) {
       return next();
@@ -570,6 +574,130 @@ async function startServer() {
     // Real Zender status check
     return await fetchRealZenderStatus(device_id);
   }
+
+  // ==========================================
+  // BAILEYS MULTI-DEVICE DIRECT SOCKET ROUTES
+  // ==========================================
+  
+  // 1. Get Baileys Status & QR Code
+  app.get('/api/whatsapp/baileys/status', async (req: express.Request, res: express.Response) => {
+    try {
+      const merchantId = (req.query.merchant_id || req.query.shopId || 'merchant') as string;
+      const state = getSessionState(merchantId);
+      
+      return res.json({
+        success: true,
+        status: state.status,
+        phone: state.phone,
+        name: state.name,
+        lastConnectedAt: state.lastConnectedAt,
+        hasQr: !!state.qrDataUrl,
+        qrDataUrl: state.qrDataUrl,
+        qrRaw: state.qrRaw
+      });
+    } catch (err: any) {
+      console.error('[Baileys Status Error]:', err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 2. Initialize / Request QR Code for Baileys
+  app.post('/api/whatsapp/baileys/connect', async (req: express.Request, res: express.Response) => {
+    try {
+      const { merchant_id, shopId, force } = req.body;
+      const mId = merchant_id || shopId || 'merchant';
+      console.log(`[Baileys Connect] Initiating socket handshake for merchant: ${mId}`);
+      
+      const state = await initBaileys(mId, !!force);
+      
+      return res.json({
+        success: true,
+        status: state.status,
+        qrDataUrl: state.qrDataUrl,
+        qrRaw: state.qrRaw,
+        phone: state.phone
+      });
+    } catch (err: any) {
+      console.error('[Baileys Connect Error]:', err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 3. Disconnect Baileys
+  app.post('/api/whatsapp/baileys/disconnect', async (req: express.Request, res: express.Response) => {
+    try {
+      const { merchant_id, shopId } = req.body;
+      const mId = merchant_id || shopId || 'merchant';
+      console.log(`[Baileys Disconnect] Disconnecting socket for merchant: ${mId}`);
+      
+      const result = await disconnectBaileys(mId);
+      return res.json({ success: true, result });
+    } catch (err: any) {
+      console.error('[Baileys Disconnect Error]:', err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 4. Test dispatch message via Baileys
+  app.post('/api/whatsapp/baileys/test', async (req: express.Request, res: express.Response) => {
+    try {
+      const { merchant_id, shopId, phone, message } = req.body;
+      const mId = merchant_id || shopId || 'merchant';
+      
+      if (!phone || !message) {
+        return res.status(400).json({ success: false, error: 'Phone number and message text are required.' });
+      }
+
+      const result = await sendBaileysMessage(mId, phone, message);
+      return res.json({ success: true, result });
+    } catch (err: any) {
+      console.error('[Baileys Test Error]:', err);
+      return res.status(400).json({ success: false, error: err.message });
+    }
+  });
+
+  // 5. Official WhatsApp Cloud API Test & Dispatch Handshake
+  app.post('/api/whatsapp/meta-cloud/test', async (req: express.Request, res: express.Response) => {
+    try {
+      const { phoneNumberId, accessToken, recipientPhone, message } = req.body;
+      if (!phoneNumberId || !accessToken || !recipientPhone || !message) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Meta Phone Number ID, Access Token, recipient phone, and message are required.' 
+        });
+      }
+
+      let cleanPhone = String(recipientPhone).replace(/[^\d]/g, '');
+      if (cleanPhone.startsWith('01') && cleanPhone.length === 11) {
+        cleanPhone = '88' + cleanPhone;
+      }
+
+      const metaUrl = `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`;
+      const metaRes = await fetch(metaUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          to: cleanPhone,
+          type: 'text',
+          text: { body: message }
+        })
+      });
+
+      const metaData = await metaRes.json();
+      if (metaRes.ok) {
+        return res.json({ success: true, data: metaData });
+      } else {
+        return res.status(400).json({ success: false, error: metaData?.error?.message || 'Meta API Error', details: metaData });
+      }
+    } catch (err: any) {
+      console.error('[Meta Cloud API Test Error]:', err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
 
   // Real-time Gateway status controller (supporting both query & param routing with strict tenant isolation)
   app.get('/api/gateways/whatsapp/status', async (req: express.Request, res: express.Response) => {
@@ -1138,7 +1266,57 @@ async function startServer() {
         return res.json({ success: true, route: 'manual_redirect', note: 'Manual override selected. Front-end will open WhatsApp chat.' });
       }
 
-      if (defaultRoute === 'whatsapp') {
+      if (defaultRoute === 'whatsapp' || defaultRoute === 'baileys' || defaultRoute === 'meta_cloud') {
+        // Priority 1: Check Baileys Multi-Device Direct Socket
+        const baileysState = getSessionState(mId);
+        if (baileysState.status === 'connected' && baileysState.socket) {
+          try {
+            console.log(`[POS Dispatch] Dispatching via Baileys direct Node socket for merchant: ${mId} to ${cleanPhone}`);
+            const result = await sendBaileysMessage(mId, cleanPhone, textMessage);
+            return res.json({ success: true, route: 'baileys', result });
+          } catch (baileysErr: any) {
+            console.error(`[POS Dispatch] Baileys delivery failed:`, baileysErr);
+            // If explicit baileys route, return error; else fallback
+            if (defaultRoute === 'baileys') {
+              return res.status(400).json({ success: false, error: baileysErr.message, code: 'BAILEYS_SEND_FAILED' });
+            }
+          }
+        }
+
+        // Priority 2: Check Official Meta WhatsApp Cloud API
+        if (gatewayConfig?.waGatewayType === 'meta_cloud' || defaultRoute === 'meta_cloud') {
+          const metaPhoneId = gatewayConfig?.meta_phone_number_id || process.env.META_WA_PHONE_NUMBER_ID;
+          const metaToken = gatewayConfig?.meta_access_token || process.env.META_WA_ACCESS_TOKEN;
+          if (metaPhoneId && metaToken) {
+            try {
+              console.log(`[POS Dispatch] Dispatching via Meta Cloud API to ${cleanPhone}`);
+              const metaRes = await fetch(`https://graph.facebook.com/v19.0/${metaPhoneId}/messages`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${metaToken}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  messaging_product: 'whatsapp',
+                  to: cleanPhone,
+                  type: 'text',
+                  text: { body: textMessage }
+                })
+              });
+              const metaData = await metaRes.json();
+              if (metaRes.ok) {
+                return res.json({ success: true, route: 'meta_cloud', data: metaData });
+              } else {
+                console.error('[POS Dispatch] Meta API rejected message:', metaData);
+                return res.status(400).json({ success: false, error: metaData?.error?.message || 'Meta Cloud API rejected message' });
+              }
+            } catch (metaErr: any) {
+              console.error('[POS Dispatch] Meta Cloud error:', metaErr);
+              return res.status(500).json({ success: false, error: metaErr.message });
+            }
+          }
+        }
+
         try {
           let realAccountUniqueId = waDeviceId || '';
           
@@ -2710,6 +2888,9 @@ async function startServer() {
     });
     app.use(vite.middlewares);
     
+    // Fallback for static files in dev mode (e.g., if Vite ignores HEAD requests)
+    app.use(express.static(process.cwd(), { index: false }));
+    
     app.use(async (req, res, next) => {
       if (req.path.startsWith('/api') || (req.path.includes('.') && !req.path.endsWith('.html'))) {
         return next();
@@ -2795,8 +2976,12 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}`);
+  app.listen(Number(PORT) || 3000, '0.0.0.0', () => {
+    console.log(`Server running at http://0.0.0.0:${PORT}`);
+    // Auto-resume previously authenticated Baileys WhatsApp sockets
+    autoResumeExistingBaileysSessions().catch(err => {
+      console.error('[Baileys AutoResume Error]:', err);
+    });
   });
 }
 

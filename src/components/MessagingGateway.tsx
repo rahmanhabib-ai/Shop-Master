@@ -67,12 +67,20 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
   const shopId = settings.id || 'merchant';
 
   // WhatsApp Configuration State
-  const [waType, setWaType] = useState<string>(settings.waGatewayType || 'zender');
+  const [waType, setWaType] = useState<string>(settings.waGatewayType || 'baileys');
   const [waToken, setWaToken] = useState<string>(settings.waToken || '');
   const [waInstanceId, setWaInstanceId] = useState<string>(settings.waInstanceId || '');
   const [waLinkSecret, setWaLinkSecret] = useState<string>(settings.waLinkSecret || '4fe17fcfe73d5035f55b9144fa10e07443659005');
+
+  // Meta Official Cloud API Config State
+  const [metaPhoneNumberId, setMetaPhoneNumberId] = useState<string>(settings.meta_phone_number_id || '');
+  const [metaAccessToken, setMetaAccessToken] = useState<string>(settings.meta_access_token || '');
+  const [metaWabaId, setMetaWabaId] = useState<string>(settings.meta_waba_id || '');
+  const [showMetaToken, setShowMetaToken] = useState<boolean>(false);
+  const [showHelpModal, setShowHelpModal] = useState<'baileys' | 'meta' | null>(null);
   
-  // Zender SaaS Integration State
+  // Baileys & Zender SaaS Integration State
+  const [baileysPhone, setBaileysPhone] = useState<string>(settings.baileys_phone || '');
   const [zenderWaDeviceId, setZenderWaDeviceId] = useState<string>(settings.zender_whatsapp_device_id || '');
   const [zenderSmsDeviceId, setZenderSmsDeviceId] = useState<string>(settings.zender_sms_device_id || '');
   const [whatsappStatus, setWhatsappStatus] = useState<'connected' | 'disconnected'>(settings.whatsapp_status || 'disconnected');
@@ -149,9 +157,49 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
   }, [whatsappStatus]);
 
   const fetchCurrentConnectionStatus = React.useCallback(async (forcedShopId?: string, forcedDeviceId?: string) => {
+    const shopIdToCheck = forcedShopId || settings.id || 'merchant';
+    
+    // Check Baileys Multi-Device Status (Primary)
+    if (waType === 'baileys') {
+      try {
+        const res = await fetch(`/api/whatsapp/baileys/status?merchant_id=${shopIdToCheck}`);
+        const data = await res.json();
+        if (data.success && data.status === 'connected') {
+          setWhatsappStatus('connected');
+          setBaileysPhone(data.phone || '');
+          setConnectionError(null);
+          if (settings.whatsapp_status !== 'connected' || settings.baileys_phone !== data.phone) {
+            onSaveSettings({
+              ...settings,
+              waGatewayType: 'baileys',
+              whatsapp_status: 'connected',
+              baileys_phone: data.phone || '',
+              default_route: 'whatsapp'
+            });
+          }
+          if (showQrModal) setShowQrModal(false);
+          return;
+        } else {
+          setWhatsappStatus('disconnected');
+        }
+      } catch (e) {
+        console.warn("Baileys status sync warning:", e);
+      }
+      return;
+    }
+
+    // Check Meta Cloud API
+    if (waType === 'meta_cloud') {
+      if (metaPhoneNumberId && metaAccessToken) {
+        setWhatsappStatus('connected');
+      } else {
+        setWhatsappStatus('disconnected');
+      }
+      return;
+    }
+
     if (waType !== 'zender' && waType !== 'walink') return;
     
-    const shopIdToCheck = forcedShopId || settings.id || 'merchant';
     const deviceIdToCheck = forcedDeviceId || zenderDeviceId || settings.zender_whatsapp_device_id || zenderWaDeviceId;
     
     if (!shopIdToCheck || !deviceIdToCheck) return;
@@ -190,7 +238,7 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
       console.warn("Status Sync Temporary Warning (retrying):", e);
       // Do not demote status or mutate settings during temporary fetch failures (e.g., server restarts)
     }
-  }, [waType, settings, zenderWaDeviceId, zenderDeviceId, showQrModal, onSaveSettings]);
+  }, [waType, metaPhoneNumberId, metaAccessToken, settings, zenderWaDeviceId, zenderDeviceId, showQrModal, onSaveSettings]);
 
   React.useEffect(() => {
     fetchCurrentConnectionStatus();
@@ -333,6 +381,101 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
     }
     setIsConnectingWa(true);
     setConnectionError(null);
+
+    // 1. BAILEYS MULTI-DEVICE (Primary & Default)
+    if (waType === 'baileys') {
+      try {
+        const shopId = settings.id || 'merchant';
+        const response = await fetch('/api/whatsapp/baileys/connect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ merchant_id: shopId, force: true })
+        });
+
+        const data = await response.json();
+        if (response.ok && data.success) {
+          if (data.status === 'connected') {
+            handleWhatsAppConnected('baileys_' + shopId, data.phone);
+            return;
+          }
+
+          if (data.qrRaw) {
+            setQrCodeData(data.qrRaw);
+            setShowQrModal(true);
+            setQrCountdown(60); // 60-second pairing timer
+
+            // Start polling for Baileys connection status
+            if ((window as any)._waPollInterval) clearInterval((window as any)._waPollInterval);
+            const intervalId = setInterval(async () => {
+              try {
+                const checkRes = await fetch(`/api/whatsapp/baileys/status?merchant_id=${shopId}`);
+                const checkData = await checkRes.json();
+                if (checkData.success && checkData.status === 'connected') {
+                  clearInterval(intervalId);
+                  handleWhatsAppConnected('baileys_' + shopId, checkData.phone);
+                } else if (checkData.qrRaw && checkData.qrRaw !== data.qrRaw) {
+                  setQrCodeData(checkData.qrRaw);
+                }
+              } catch (e) {}
+            }, 3000);
+            (window as any)._waPollInterval = intervalId;
+            setTimeout(() => clearInterval(intervalId), 180000);
+          } else {
+            // Poll for QR if not immediately returned
+            setShowQrModal(true);
+            setQrCountdown(60);
+            if ((window as any)._waPollInterval) clearInterval((window as any)._waPollInterval);
+            const intervalId = setInterval(async () => {
+              try {
+                const checkRes = await fetch(`/api/whatsapp/baileys/status?merchant_id=${shopId}`);
+                const checkData = await checkRes.json();
+                if (checkData.success && checkData.status === 'connected') {
+                  clearInterval(intervalId);
+                  handleWhatsAppConnected('baileys_' + shopId, checkData.phone);
+                } else if (checkData.qrRaw) {
+                  setQrCodeData(checkData.qrRaw);
+                }
+              } catch (e) {}
+            }, 3000);
+            (window as any)._waPollInterval = intervalId;
+            setTimeout(() => clearInterval(intervalId), 180000);
+          }
+        } else {
+          setConnectionError(data.error || 'Failed to initialize Baileys WhatsApp connection.');
+        }
+      } catch (err: any) {
+        console.error('Baileys connect error:', err);
+        setConnectionError('Baileys Socket connection error: ' + err.message);
+      } finally {
+        setIsConnectingWa(false);
+      }
+      return;
+    }
+
+    // 2. META CLOUD API (Alternative)
+    if (waType === 'meta_cloud') {
+      if (!metaPhoneNumberId || !metaAccessToken) {
+        setConnectionError('Meta Phone Number ID এবং Permanent Access Token প্রদান করুন।');
+        setIsConnectingWa(false);
+        return;
+      }
+      setWhatsappStatus('connected');
+      onSaveSettings({
+        ...settings,
+        waGatewayType: 'meta_cloud',
+        meta_phone_number_id: metaPhoneNumberId,
+        meta_access_token: metaAccessToken,
+        meta_waba_id: metaWabaId,
+        whatsapp_status: 'connected',
+        default_route: 'whatsapp'
+      });
+      setShowSuccessNotification(true);
+      setSuccessMessageDetails('Official Meta WhatsApp Cloud API সফলভাবে কনফিগার করা হয়েছে!');
+      setIsConnectingWa(false);
+      return;
+    }
+
+    // 3. Fallback Zender Connection
     try {
       const shopId = settings.id || 'merchant';
       const deviceSessionId = zenderDeviceId;
@@ -449,9 +592,26 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
   };
 
   const handleUnlinkWhatsApp = async () => {
-    // Replaced window.confirm with a direct call as confirm is blocked in sandboxed iframes
     try {
       setConnectionError('Disconnecting... Please wait.');
+
+      if (waType === 'baileys') {
+        const shopId = settings.id || 'merchant';
+        await fetch('/api/whatsapp/baileys/disconnect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ merchant_id: shopId })
+        });
+        setWhatsappStatus('disconnected');
+        setBaileysPhone('');
+        onSaveSettings({
+          ...settings,
+          whatsapp_status: 'disconnected',
+          baileys_phone: ''
+        });
+        setConnectionError('WhatsApp Baileys session disconnected.');
+        return;
+      }
       
       // Terminate Zender session
       const res = await fetch('/api/gateways/whatsapp/disconnect', {
@@ -527,6 +687,9 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
           shopId,
           gatewayConfig: {
             default_route: 'whatsapp',
+            waGatewayType: waType,
+            meta_phone_number_id: metaPhoneNumberId,
+            meta_access_token: metaAccessToken,
             zender_whatsapp_device_id: activeId,
             zender_api_key: zenderApiKey || waLinkSecret || settings.zender_api_key || settings.waToken,
             endpoint_url: zenderEndpointUrl || 'https://app.sellerscampus.com/api/v1'
@@ -579,7 +742,7 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
   const [broadcastMethod, setBroadcastMethod] = useState<'whatsapp' | 'sms'>('whatsapp');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSending, setIsSending] = useState(false);
-  const [broadcastStatus, setBroadcastStatus] = useState<{ success: number; failed: number } | null>(null);
+  const [broadcastStatus, setBroadcastStatus] = useState<{ success: number; failed: number; message?: string } | null>(null);
 
   // Testing & Save Feedback
   const [isSaving, setIsSaving] = useState(false);
@@ -610,6 +773,10 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
         waGatewayType: waType,
         waToken: waToken,
         waInstanceId: waInstanceId,
+        meta_phone_number_id: metaPhoneNumberId,
+        meta_access_token: metaAccessToken,
+        meta_waba_id: metaWabaId,
+        baileys_phone: baileysPhone,
         smsGatewayType: smsType,
         smsApiKey: smsApiKey,
         smsSenderId: smsSenderId,
@@ -860,12 +1027,12 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
                 {/* Primary Default Route Selection Indicator */}
                 <div className="bg-slate-50/50 dark:bg-slate-950/20 p-5 rounded-3xl border border-gray-100 dark:border-slate-800/80 mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                   <div>
-                    <h3 className="font-extrabold text-sm text-gray-950 dark:text-gray-100">Primary Dispatch Dispatcher</h3>
-                    <p className="text-[11px] text-gray-450 dark:text-gray-400 font-medium">Select fallback medium for automated invoice messaging upon order completion</p>
+                    <h3 className="font-extrabold text-sm text-gray-950 dark:text-gray-100">Primary Dispatch Method</h3>
+                    <p className="text-[11px] text-gray-400 font-medium">ইনভয়েস এবং নোটিফিকেশন পাঠানোর প্রধান চ্যানেল নির্ধারণ করুন</p>
                   </div>
                   <div className="flex gap-2">
                     {[
-                      { id: 'whatsapp', label: 'WhatsApp Silent Auto (Zender)', color: 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/30' }
+                      { id: 'whatsapp', label: '✓ WhatsApp Gateway Active', color: 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/30' }
                     ].map(route => (
                       <button
                         key={route.id}
@@ -876,9 +1043,9 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
                             default_route: route.id
                           });
                         }}
-                        className={`px-3 py-2 rounded-xl border text-[11px] font-bold tracking-tight transition-all cursor-pointer ${
+                        className={`px-3.5 py-2 rounded-xl border text-xs font-bold tracking-tight transition-all cursor-pointer ${
                           defaultRoute === route.id
-                            ? `${route.color} ring-2 ring-indigo-500 scale-102`
+                            ? `${route.color} ring-2 ring-emerald-500`
                             : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-800 text-gray-500 dark:text-gray-400 hover:text-gray-900'
                         }`}
                       >
@@ -888,197 +1055,283 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
                   </div>
                 </div>
 
-                <div className="max-w-2xl mx-auto">
-                  {/* WhatsApp Hub */}
-                  <div className="bg-slate-50/60 dark:bg-slate-950/30 p-5 rounded-2xl border border-gray-100 dark:border-slate-850">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 rounded-xl flex items-center justify-center font-bold">
+                <div className="max-w-3xl mx-auto space-y-6">
+                  {/* WhatsApp Hub Container */}
+                  <div className="bg-slate-50/60 dark:bg-slate-950/30 p-6 rounded-3xl border border-gray-100 dark:border-slate-850 space-y-5">
+                    {/* Header */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3.5">
+                        <div className="w-12 h-12 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-2xl flex items-center justify-center font-bold text-base shadow-sm">
                           WA
                         </div>
                         <div>
-                          <h3 className="font-black text-sm text-gray-900 dark:text-white">WhatsApp Gateway Node</h3>
-                          <p className="text-[11px] text-gray-400 font-medium">Select notification delivery dispatch method</p>
+                          <h3 className="font-black text-base text-gray-900 dark:text-white">WhatsApp Messaging Gateway</h3>
+                          <p className="text-xs text-gray-400 font-medium">স্বয়ংক্রিয় হোয়াটসঅ্যাপ বার্তা প্রেরণের টেকনোলজি নির্বাচন করুন</p>
                         </div>
                       </div>
                       
                       {whatsappStatus === 'connected' ? (
-                        <span className="flex items-center gap-1 text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400 bg-emerald-100/60 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Connected
+                        <span className="flex items-center gap-1.5 text-xs font-bold uppercase text-emerald-600 dark:text-emerald-400 bg-emerald-100/60 dark:bg-emerald-950/40 px-3 py-1 rounded-full border border-emerald-200/50 dark:border-emerald-800/40">
+                          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span> Connected
                         </span>
                       ) : (
-                        <span className="flex items-center gap-1 text-[10px] font-black uppercase text-gray-400 bg-gray-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
+                        <span className="flex items-center gap-1.5 text-xs font-bold uppercase text-gray-400 bg-gray-100 dark:bg-slate-800 px-3 py-1 rounded-full border border-gray-200 dark:border-slate-700">
                           Disconnected
                         </span>
                       )}
                     </div>
 
-                    <div className="space-y-4">
-                      <div>
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5">Gateway Technology</label>
-                        <select
-                          value="zender"
-                          onChange={() => {}}
-                          disabled
-                          className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-800 font-semibold focus:ring-0 outline-none bg-gray-50 dark:bg-slate-800/50 text-sm opacity-80 cursor-not-allowed dark:text-slate-200"
+                    {/* Dual Gateway Selector Tabs */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">নির্বাচন করুন</label>
+                        <button
+                          type="button"
+                          onClick={() => setShowHelpModal(waType === 'meta_cloud' ? 'meta' : 'baileys')}
+                          className="text-xs text-indigo-600 dark:text-indigo-400 font-bold flex items-center gap-1.5 hover:underline cursor-pointer bg-indigo-50/50 dark:bg-indigo-950/30 px-2.5 py-1 rounded-lg"
                         >
-                          <option value="zender">WhatsApp Cloud Gateway (QR Client)</option>
-                        </select>
+                          <HelpCircle className="w-4 h-4 text-indigo-500" /> How It Works / ব্যবহারের নিয়ম
+                        </button>
                       </div>
 
-                      {/* Zender White-label Connector Area */}
-                      <div className="bg-slate-100/50 dark:bg-slate-900/60 border border-slate-200/50 dark:border-slate-800/80 p-4 rounded-xl space-y-4">
-                          <h5 className="hidden text-[11px] font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/20 px-2 py-1.5 rounded-lg border border-indigo-100/20 uppercase tracking-wider text-center">
-                            SellersCampus / Zender WhatsApp Configuration
-                          </h5>
-                          
-                          <div className="space-y-3">
-                            <div>
-                              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Device Session ID</label>
-                              <div className="flex gap-2">
-                                <input
-                                  type="text"
-                                  value={zenderDeviceId}
-                                  onChange={(e) => setZenderDeviceId(e.target.value)}
-                                  placeholder="e.g. z_wa_merchant_19361"
-                                  className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-slate-800 text-xs font-semibold focus:ring-2 focus:ring-indigo-500 outline-none bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const shopId = settings.id || 'merchant';
-                                    setZenderDeviceId('z_wa_merchant_' + shopId + '_' + Date.now());
-                                  }}
-                                  className="px-3 bg-gray-200 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-xl text-[10px] font-bold hover:bg-gray-300 hover:dark:bg-slate-700 whitespace-nowrap cursor-pointer transition-all active:scale-[0.98]"
-                                >
-                                  Generate ID
-                                </button>
-                              </div>
-                            </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {/* Option 1: Our Own Gateway */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWaType('baileys');
+                            onSaveSettings({ ...settings, waGatewayType: 'baileys' });
+                          }}
+                          className={`p-4 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2.5 ${
+                            waType === 'baileys'
+                              ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-950 dark:text-emerald-200 ring-2 ring-emerald-500 shadow-sm'
+                              : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-800 text-gray-700 dark:text-slate-300 hover:border-gray-300'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-extrabold text-sm flex items-center gap-2">
+                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                              Our Own Gateway
+                            </span>
+                            <span className="text-[10px] bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+                              100% Free
+                            </span>
                           </div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                            সরাসরি কিউআর কোড স্ক্যান করে কানেক্ট করুন। কোনো প্রকার থার্ড-পার্টি সাবস্ক্রিপশন বা অতিরিক্ত খরচ নেই।
+                          </p>
+                        </button>
 
-                          <div className="border-t border-slate-200/50 dark:border-slate-800/80 pt-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Device Auth Status</span>
-                              <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${
-                                whatsappStatus === 'connected' 
-                                  ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' 
-                                  : 'bg-rose-500/10 text-rose-500 border border-rose-500/20'
-                              }`}>
-                                {whatsappStatus === 'connected' ? 'Connected / Active' : 'Disconnected / Unlinked'}
+                        {/* Option 2: Official WhatsApp API */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWaType('meta_cloud');
+                            onSaveSettings({ ...settings, waGatewayType: 'meta_cloud' });
+                          }}
+                          className={`p-4 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2.5 ${
+                            waType === 'meta_cloud'
+                              ? 'bg-indigo-500/10 border-indigo-500/50 text-indigo-950 dark:text-indigo-200 ring-2 ring-indigo-500 shadow-sm'
+                              : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-800 text-gray-700 dark:text-slate-300 hover:border-gray-300'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-extrabold text-sm flex items-center gap-2">
+                              <span className="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
+                              Official WhatsApp API
+                            </span>
+                            <span className="text-[10px] bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+                              Meta Enterprise
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                            Meta Business Platform-এর অফিশিয়াল ক্লাউড এপিআই। আনলিমিটেড ভেরিফাইড ব্র্যান্ড মেসেজিংয়ের জন্য।
+                          </p>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 1. OUR OWN GATEWAY CONTROL PANEL */}
+                    {waType === 'baileys' && (
+                      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl space-y-4 shadow-sm">
+                        <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-800 pb-3">
+                          <div>
+                            <h4 className="text-sm font-black text-gray-900 dark:text-white flex items-center gap-2">
+                              Our Own Gateway Configuration
+                            </h4>
+                            <p className="text-[11px] text-gray-400">Node.js ব্যাকগ্রাউন্ড সকেটের মাধ্যমে নিরবচ্ছিন্ন সংযোগ</p>
+                          </div>
+                          <span className={`text-[11px] uppercase font-bold px-2.5 py-1 rounded-full ${
+                            whatsappStatus === 'connected' 
+                              ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' 
+                              : 'bg-rose-500/10 text-rose-600 border border-rose-500/20'
+                          }`}>
+                            {whatsappStatus === 'connected' ? 'Connected & Active' : 'Disconnected'}
+                          </span>
+                        </div>
+
+                        {whatsappStatus === 'connected' ? (
+                          <div className="space-y-3">
+                            <div className="p-4 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/50 rounded-2xl flex items-center justify-between">
+                              <div className="space-y-1">
+                                <p className="text-xs font-extrabold text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5">
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-600" /> WhatsApp সেশন সক্রিয় রয়েছে
+                                </p>
+                                <p className="text-xs text-emerald-700 dark:text-emerald-400 font-mono">
+                                  {baileysPhone ? `কানেক্টেড নম্বর: +${baileysPhone}` : 'সেশন প্রস্তুত এবং ব্যাকগ্রাউন্ডে সক্রিয়'}
+                                </p>
+                              </div>
+                              <span className="p-2 bg-emerald-500/10 rounded-full text-emerald-600">
+                                <CheckCircle2 className="w-6 h-6" />
                               </span>
                             </div>
-
-                            {whatsappStatus === 'connected' ? (
-                              <div className="space-y-2">
-                                <p className="text-[11px] text-emerald-600 dark:text-emerald-450 font-bold leading-relaxed">
-                                  ✓ WhatsApp system linked successfully on dynamic session container. Deliveries will route in real-time.
-                                </p>
-                                <button
-                                  type="button"
-                                  onClick={handleUnlinkWhatsApp}
-                                  className="w-full py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/50 rounded-lg text-xs font-bold transition-all cursor-pointer"
-                                >
-                                  Disconnect WhatsApp Session
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="space-y-2">
-                                <p className="text-[11px] text-gray-400 leading-relaxed font-semibold">
-                                  Handshake status is Disconnected. Generate a QR code to link your device.
-                                </p>
-                                <div className="flex flex-col gap-2">
-                                  {/* Generate QR Code Section */}
-                                  <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-gray-200 dark:border-slate-800 space-y-3.5">
-                                    <div className="space-y-3">
-                                      <p className="text-[11px] text-gray-500 dark:text-gray-400 font-semibold leading-relaxed border-l-2 border-indigo-500 pl-2">
-                                        💡 <strong>এখানে কোনো নম্বর দেওয়ার প্রয়োজন নেই।</strong> নিচে "বারকোড জেনারেট করুন" বাটনে ক্লিক করুন এবং আপনার মোবাইলের হোয়াটসঅ্যাপ থেকে স্ক্যান করে যুক্ত হোন। (No need to input your number. Just generate the QR code and scan it with your WhatsApp app.)
-                                      </p>
-                                      <div className="flex flex-col gap-2">
-                                        <button
-                                          type="button"
-                                          onClick={handleConnectWhatsApp}
-                                          disabled={isConnectingWa}
-                                          className="w-full py-2 bg-gradient-to-r from-indigo-500 to-blue-500 hover:from-indigo-600 hover:to-blue-600 font-bold rounded-xl text-xs text-white transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1"
-                                        >
-                                          {isConnectingWa ? 'অপেক্ষা করুন...' : 'বারকোড জেনারেট করুন (Generate WhatsApp QR)'}
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={async (e) => {
-                                            e.preventDefault();
-                                            setIsSyncing(true);
-                                            await fetchCurrentConnectionStatus(shopId, zenderDeviceId);
-                                            setIsSyncing(false);
-                                          }}
-                                          disabled={isSyncing}
-                                          className="w-full py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl text-xs transition-all cursor-pointer border border-indigo-100 disabled:opacity-50"
-                                        >
-                                          {isSyncing ? 'Syncing...' : 'Re-sync Connection'}
-                                        </button>
-                                      </div>
-                                    </div>
-
-                                    {connectionError && (
-                                      <p className="text-[10px] text-rose-500 font-bold whitespace-normal leading-normal">{connectionError}</p>
-                                    )}
-
-
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                      <div className="p-3 bg-indigo-50/40 dark:bg-indigo-950/10 rounded-xl text-xs text-indigo-600 dark:text-indigo-400 leading-relaxed font-semibold">
-                        The WhatsApp Gateway uses a central cloud node. Pair once and receive instant, automatic WhatsApp invoice drops.
-                      </div>
-
-                      {/* Test Connection Section (Admin) */}
-                      <div className="bg-indigo-50/40 dark:bg-indigo-950/20 p-4 rounded-xl border border-indigo-100/50 dark:border-indigo-950/45 space-y-3">
-                        <div>
-                          <h6 className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
-                            <span className="flex h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
-                            হোয়াটসঅ্যাপ কানেকশন টেস্ট (Test Connection)
-                          </h6>
-                          <p className="text-[9px] text-gray-400 font-medium">আপনার হোয়াটসঅ্যাপ গেটওয়েটি সঠিকভাবে বার্তা পাঠাচ্ছে কি না তা পরীক্ষা করুন</p>
-                        </div>
-                        <div className="space-y-2">
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
-                              value={testPhone}
-                              onChange={(e) => setTestPhone(e.target.value)}
-                              placeholder="টেস্ট নম্বর দিন (যেমন: 017XXXXXXXX)"
-                              className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 border border-indigo-100 dark:border-slate-800 rounded-xl text-xs font-mono font-bold focus:ring-1 focus:ring-indigo-500 outline-none text-slate-800 dark:text-slate-200 transition-all shadow-inner"
-                            />
                             <button
                               type="button"
-                              onClick={handleSendTestMessage}
-                              disabled={testSending || !testPhone}
-                              className="px-4 py-1.5 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-650 hover:to-indigo-650 text-white font-bold rounded-xl text-xs shadow-xs transition-all whitespace-nowrap cursor-pointer active:scale-98 disabled:opacity-55"
+                              onClick={handleUnlinkWhatsApp}
+                              className="w-full py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/50 rounded-xl text-xs font-bold transition-all cursor-pointer"
                             >
-                              {testSending ? 'পাঠানো হচ্ছে...' : 'টেস্ট মেসেজ পাঠান'}
+                              WhatsApp সেশন ডিসকানেক্ট করুন (Disconnect Session)
                             </button>
                           </div>
+                        ) : (
+                          <div className="space-y-4">
+                            <div className="p-3.5 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl border border-emerald-100 dark:border-emerald-900/30 text-xs text-emerald-800 dark:text-emerald-300 leading-relaxed font-medium">
+                              💡 <strong>সহজ সংযোগ:</strong> নিচের বাটনে ক্লিক করে কিউআর কোডটি আপনার ফোনের WhatsApp অ্যাপ (Linked Devices) থেকে স্ক্যান করুন। কোনো বাড়তি সফটওয়্যার লাগবে না।
+                            </div>
+                            <div className="flex flex-col sm:flex-row gap-2.5">
+                              <button
+                                type="button"
+                                onClick={handleConnectWhatsApp}
+                                disabled={isConnectingWa}
+                                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 font-bold rounded-xl text-xs text-white transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm"
+                              >
+                                {isConnectingWa ? 'কিউআর তৈরি হচ্ছে...' : 'কিউআর কোড জেনারেট করুন (Generate QR)'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleResync}
+                                disabled={isSyncing}
+                                className="px-4 py-3 bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 text-gray-700 dark:text-slate-300 font-bold rounded-xl text-xs transition-all cursor-pointer"
+                              >
+                                Re-sync Status
+                              </button>
+                            </div>
+                            {connectionError && (
+                              <p className="text-xs text-rose-500 font-bold p-2.5 bg-rose-50 dark:bg-rose-950/20 rounded-lg">{connectionError}</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
-                          {testMsgStatus && (
-                            <p className="text-[10.5px] text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100/55 p-2 rounded-xl font-bold whitespace-normal leading-normal">
-                              {testMsgStatus}
-                            </p>
-                          )}
-
-                          {testMsgError && (
-                            <p className="text-[10.5px] text-rose-500 bg-rose-50 dark:bg-rose-950/20 border border-rose-100/55 p-2 rounded-xl font-bold whitespace-normal leading-normal">
-                              {testMsgError}
-                            </p>
-                          )}
+                    {/* 2. OFFICIAL WHATSAPP API CONTROL PANEL */}
+                    {waType === 'meta_cloud' && (
+                      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl space-y-4 shadow-sm">
+                        <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-800 pb-3">
+                          <div>
+                            <h4 className="text-sm font-black text-gray-900 dark:text-white flex items-center gap-2">
+                              Official Meta Cloud API Credentials
+                            </h4>
+                            <p className="text-[11px] text-gray-400">Meta Developer অ্যাকাউন্ট থেকে ক্রেডেনশিয়াল প্রদান করুন</p>
+                          </div>
                         </div>
+
+                        <div className="space-y-3.5">
+                          <div>
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Phone Number ID *</label>
+                            <input
+                              type="text"
+                              value={metaPhoneNumberId}
+                              onChange={(e) => setMetaPhoneNumberId(e.target.value)}
+                              placeholder="e.g. 104829104810294"
+                              className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-slate-800 text-xs font-mono font-semibold focus:ring-2 focus:ring-indigo-500 outline-none bg-gray-50/50 dark:bg-slate-950 text-slate-800 dark:text-slate-200"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Permanent Access Token *</label>
+                            <div className="relative">
+                              <input
+                                type={showMetaToken ? "text" : "password"}
+                                value={metaAccessToken}
+                                onChange={(e) => setMetaAccessToken(e.target.value)}
+                                placeholder="EAAG..."
+                                className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-slate-800 text-xs font-mono font-semibold focus:ring-2 focus:ring-indigo-500 outline-none bg-gray-50/50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 pr-10"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowMetaToken(!showMetaToken)}
+                                className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
+                              >
+                                {showMetaToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                              </button>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">WABA Account ID (Optional)</label>
+                            <input
+                              type="text"
+                              value={metaWabaId}
+                              onChange={(e) => setMetaWabaId(e.target.value)}
+                              placeholder="e.g. 109283019283"
+                              className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-slate-800 text-xs font-mono font-semibold focus:ring-2 focus:ring-indigo-500 outline-none bg-gray-50/50 dark:bg-slate-950 text-slate-800 dark:text-slate-200"
+                            />
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={handleConnectWhatsApp}
+                            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-all cursor-pointer shadow-sm"
+                          >
+                            Meta Cloud API সেটিংস সংরক্ষণ করুন
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Test Connection Section */}
+                    <div className="bg-indigo-50/40 dark:bg-indigo-950/20 p-4 rounded-2xl border border-indigo-100/50 dark:border-indigo-950/45 space-y-3">
+                      <div>
+                        <h6 className="text-[11px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <span className="flex h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                          হোয়াটসঅ্যাপ টেস্ট মেসেজ প্রেরণ (Test Connection)
+                        </h6>
+                        <p className="text-[10px] text-gray-400 font-medium">আপনার গেটওয়ে সঠিকভাবে কাজ করছে কি না তা তাৎক্ষণিক পরীক্ষা করুন</p>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={testPhone}
+                            onChange={(e) => setTestPhone(e.target.value)}
+                            placeholder="মোবাইল নম্বর লিখুন (যেমন: 017XXXXXXXX)"
+                            className="w-full px-3.5 py-2 bg-white dark:bg-slate-900 border border-indigo-100 dark:border-slate-800 rounded-xl text-xs font-mono font-bold focus:ring-2 focus:ring-indigo-500 outline-none text-slate-800 dark:text-slate-200 transition-all shadow-inner"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleSendTestMessage}
+                            disabled={testSending || !testPhone}
+                            className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-sm transition-all whitespace-nowrap cursor-pointer disabled:opacity-50"
+                          >
+                            {testSending ? 'পাঠানো হচ্ছে...' : 'টেস্ট মেসেজ পাঠান'}
+                          </button>
+                        </div>
+
+                        {testMsgStatus && (
+                          <p className="text-xs text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 p-2.5 rounded-xl font-bold">
+                            {testMsgStatus}
+                          </p>
+                        )}
+
+                        {testMsgError && (
+                          <p className="text-xs text-rose-500 bg-rose-50 dark:bg-rose-950/20 border border-rose-100 p-2.5 rounded-xl font-bold">
+                            {testMsgError}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
-
                 </div>
 
 
@@ -1356,6 +1609,84 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
         </div>
       </div>
       
+      {/* How to Use Modal */}
+      {showHelpModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl border border-gray-100 dark:border-slate-800 flex flex-col max-h-[90vh]">
+            <div className="p-4 border-b border-gray-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950">
+              <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <HelpCircle className="w-5 h-5 text-indigo-500" />
+                {showHelpModal === 'baileys' ? 'Our Own Gateway — ব্যবহার নির্দেশিকা' : 'Official WhatsApp API — কনফিগার নির্দেশিকা'}
+              </h3>
+              <button onClick={() => setShowHelpModal(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-4 text-xs leading-relaxed text-gray-700 dark:text-slate-300">
+              {showHelpModal === 'baileys' ? (
+                <>
+                  <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 rounded-xl border border-emerald-200/50">
+                    <p className="font-bold text-emerald-800 dark:text-emerald-300 text-sm mb-1">
+                      ✨ Our Own Gateway (100% Free & Self-Hosted)
+                    </p>
+                    <p className="text-emerald-700 dark:text-emerald-400">
+                      কোনো থার্ড-পার্টি সার্ভিস বা অতিরিক্ত মাসিক খরচ ছাড়াই আপনার যেকোনো সাধারণ বা বিজনেস হোয়াটসঅ্যাপ নম্বর সরাসরি যুক্ত করতে পারবেন।
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <h4 className="font-bold text-sm text-gray-900 dark:text-white">কিউআর কোড দিয়ে সংযোগ প্রক্রিয়া:</h4>
+                    <ol className="list-decimal pl-4 space-y-2 font-medium">
+                      <li><strong>কিউআর কোড জেনারেট করুন</strong>: ড্যাশবোর্ডে <em>"কিউআর কোড জেনারেট করুন"</em> বাটনে ক্লিক করুন।</li>
+                      <li><strong>WhatsApp অ্যাপ খুলুন</strong>: আপনার স্মার্টফোনে WhatsApp অ্যাপ ওপেন করুন।</li>
+                      <li><strong>Linked Devices-এ যান</strong>: উপরে ৩-ডট মেনু বা সেটিংস থেকে <em>Linked Devices (সংযুক্ত ডিভাইস)</em> অপশনে যান।</li>
+                      <li><strong>Link a Device চাপুন</strong>: আপনার ফোনের ক্যামেরা দিয়ে স্ক্রিনের কিউআর কোডটি স্ক্যান করুন।</li>
+                      <li><strong>স্বয়ংক্রিয় সংযোগ</strong>: স্ক্যান সম্পূর্ণ হওয়ামাত্র সেশনটি ব্যাকএন্ডে ২৪/৭ সকেটে সংরক্ষিত থাকবে।</li>
+                    </ol>
+                  </div>
+
+                  <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-xl border border-blue-200/50 text-blue-800 dark:text-blue-300">
+                    <strong>💡 সুবিধা:</strong> এটি সরাসরি ব্যাকএন্ড সার্ভারে সকেট চালু রাখে, তাই POS সেল বা বকেয়া রিমাইন্ডার মেসেজ স্বয়ংক্রিয়ভাবে সেন্ড হবে।
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="p-3 bg-indigo-50 dark:bg-indigo-950/30 rounded-xl border border-indigo-200/50">
+                    <p className="font-bold text-indigo-800 dark:text-indigo-300 text-sm mb-1">
+                      🏢 Official WhatsApp Cloud API (Meta Enterprise)
+                    </p>
+                    <p className="text-indigo-700 dark:text-indigo-400">
+                      বড় প্রতিষ্ঠান এবং আনলিমিটেড ভেরিফাইড ব্র্যান্ড মেসেজিংয়ের জন্য মেটার অফিসিয়াল ক্লাউড এপিআই ব্যবহার করুন।
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <h4 className="font-bold text-sm text-gray-900 dark:text-white">সেটআপ করার নিয়ম:</h4>
+                    <ol className="list-decimal pl-4 space-y-2 font-medium">
+                      <li><strong>Meta Developer একাউন্ট</strong>: developers.facebook.com এ গিয়ে একটি App তৈরি করুন।</li>
+                      <li><strong>WhatsApp প্রোডাক্ট যুক্ত করুন</strong>: অ্যাপের ড্যাশবোর্ড থেকে WhatsApp সিলেক্ট করুন।</li>
+                      <li><strong>Phone Number ID সংগ্রহ করুন</strong>: Getting Started ট্যাব থেকে <em>Phone Number ID</em> কপি করে পেস্ট করুন।</li>
+                      <li><strong>System User Access Token নিন</strong>: Business Settings &gt; System Users থেকে <em>Permanent Access Token</em> তৈরি করে এখানে দিন।</li>
+                      <li><strong>সংরক্ষণ করুন</strong>: সেটিংস সংরক্ষণ বাটনে ক্লিক করলে তাৎক্ষণিক গেটওয়ে সক্রিয় হয়ে যাবে।</li>
+                    </ol>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="p-4 bg-gray-50 dark:bg-slate-950 border-t border-gray-100 dark:border-slate-800 flex justify-end">
+              <button
+                onClick={() => setShowHelpModal(null)}
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-all cursor-pointer"
+              >
+                বুঝেছি, বন্ধ করুন
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showQrModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl border border-gray-100 dark:border-slate-800 flex flex-col">
