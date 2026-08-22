@@ -64,6 +64,10 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
 
   const [activeSubTab, setActiveSubTab] = useState<'config' | 'templates' | 'broadcast' | 'logs'>('config');
 
+  // Default Country Code Selection State
+  const [defaultCountryCode, setDefaultCountryCode] = useState<string>(settings.defaultCountryCode || '880');
+  const [defaultCountryName, setDefaultCountryName] = useState<string>(settings.defaultCountryName || 'Bangladesh (+880)');
+
   const shopId = settings.id || 'merchant';
 
   // WhatsApp Configuration State
@@ -146,6 +150,8 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
       setZenderApiKey('4fe17fcfe73d5035f55b9144fa10e07443659005');
       setZenderDeviceId(prev => prev ? prev : (shopSettings.zender_device_id || shopSettings.zender_whatsapp_device_id || ''));
       setWaLinkSecret('4fe17fcfe73d5035f55b9144fa10e07443659005');
+      setDefaultCountryCode(shopSettings.defaultCountryCode || '880');
+      setDefaultCountryName(shopSettings.defaultCountryName || 'Bangladesh (+880)');
     }
   }, [shopSettings]);
 
@@ -793,6 +799,8 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
         zender_endpoint_url: zenderEndpointUrl,
         zender_api_key: zenderApiKey,
         zender_device_id: zenderDeviceId || zenderWaDeviceId,
+        defaultCountryCode: defaultCountryCode,
+        defaultCountryName: defaultCountryName,
       });
       setIsSaving(false);
       setSaveSuccess(true);
@@ -1024,6 +1032,47 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
                 transition={{ duration: 0.2 }}
                 className="space-y-6"
               >
+                 {/* Default Country Code Setting Panel */}
+                <div className="bg-gradient-to-r from-indigo-50/50 to-blue-50/50 dark:from-indigo-950/20 dark:to-blue-950/20 p-5 rounded-3xl border border-indigo-100 dark:border-indigo-900/40 mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
+                  <div>
+                    <h3 className="font-extrabold text-sm text-gray-950 dark:text-gray-100 flex items-center gap-2">
+                      🌍 Default Customer Country & Country Code
+                    </h3>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium mt-0.5">
+                      প্রবাসী বা বিদেশি কাস্টমারদের জন্য স্বয়ংক্রিয় কান্ট্রি কোড প্রিফিক্স (যেমন: সৌদি আরব +966, দুবাই +971, বাংলাদেশ +880)
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 w-full md:w-auto">
+                    <select
+                      value={defaultCountryCode}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setDefaultCountryCode(val);
+                        if (val === '880') setDefaultCountryName('Bangladesh (+880)');
+                        else if (val === '966') setDefaultCountryName('Saudi Arabia (+966)');
+                        else if (val === '971') setDefaultCountryName('UAE / Dubai (+971)');
+                        else if (val === '974') setDefaultCountryName('Qatar (+974)');
+                        else if (val === '60') setDefaultCountryName('Malaysia (+60)');
+                        else if (val === '965') setDefaultCountryName('Kuwait (+965)');
+                        else if (val === '968') setDefaultCountryName('Oman (+968)');
+                        else if (val === '44') setDefaultCountryName('UK (+44)');
+                        else if (val === '1') setDefaultCountryName('USA / Canada (+1)');
+                      }}
+                      className="px-3.5 py-2.5 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-900 text-xs font-bold text-gray-800 dark:text-gray-200 outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
+                    >
+                      <option value="880">🇧🇩 Bangladesh (+880)</option>
+                      <option value="966">🇸🇦 Saudi Arabia (+966)</option>
+                      <option value="971">🇦🇪 UAE / Dubai (+971)</option>
+                      <option value="974">🇶🇦 Qatar (+974)</option>
+                      <option value="60">🇲🇾 Malaysia (+60)</option>
+                      <option value="965">🇰🇼 Kuwait (+965)</option>
+                      <option value="968">🇴🇲 Oman (+968)</option>
+                      <option value="44">🇬🇧 United Kingdom (+44)</option>
+                      <option value="1">🇺🇸 USA / Canada (+1)</option>
+                    </select>
+                  </div>
+                </div>
+
                 {/* Primary Default Route Selection Indicator */}
                 <div className="bg-slate-50/50 dark:bg-slate-950/20 p-5 rounded-3xl border border-gray-100 dark:border-slate-800/80 mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                   <div>

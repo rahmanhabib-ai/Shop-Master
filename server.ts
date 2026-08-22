@@ -546,7 +546,7 @@ async function startServer() {
       const api_key = '4fe17fcfe73d5035f55b9144fa10e07443659005';
       const checkUrl = `https://app.sellerscampus.com/api/get/wa.accounts?secret=${api_key}`;
       
-      const response = await fetch(checkUrl, { method: 'GET' });
+      const response = await fetch(checkUrl, { method: 'GET', signal: AbortSignal.timeout(3000) });
       if (response.ok) {
         const data: any = await response.json();
         if (data.data && Array.isArray(data.data) && data.data.length > 0) {
@@ -558,8 +558,11 @@ async function startServer() {
           }
         }
       }
-    } catch (e) {
-      console.error('[Zender Status Check Error]', e);
+    } catch (e: any) {
+      // Suppress noisy network or DNS lookup errors when offline or domain unreachable
+      if (!e.message?.includes('ENOTFOUND') && !e.message?.includes('timeout') && !e.message?.includes('fetch failed')) {
+        console.error('[Zender Status Check Error]', e.message);
+      }
     }
     return { isConnected: false, phone: '' };
   }
@@ -1256,8 +1259,19 @@ async function startServer() {
 
       let cleanPhone = recipientPhone.replace(/[^\d+]/g, ''); // leave numbers and +
       if (cleanPhone.startsWith('+')) cleanPhone = cleanPhone.slice(1);
-      if (cleanPhone.length === 11 && cleanPhone.startsWith('01')) {
+
+      const defaultCountryCode = gatewayConfig?.defaultCountryCode || '880';
+
+      // If phone starts with 0 and is local length (e.g. 01XXXXXXXX or 05XXXXXXXX)
+      if (cleanPhone.startsWith('0')) {
+        cleanPhone = defaultCountryCode + cleanPhone.slice(1);
+      } else if (cleanPhone.length === 10 && !cleanPhone.startsWith(defaultCountryCode)) {
+        // If 10 digits without country code (e.g., Saudi 5XXXXXXXX or BD without 0)
+        cleanPhone = defaultCountryCode + cleanPhone;
+      } else if (cleanPhone.length === 11 && cleanPhone.startsWith('01')) {
         cleanPhone = '88' + cleanPhone;
+      } else if (!cleanPhone.startsWith(defaultCountryCode) && cleanPhone.length <= 10) {
+        cleanPhone = defaultCountryCode + cleanPhone;
       }
 
       console.log(`[POS Dispatch Controller] Initiating automated drop-send. Route: ${defaultRoute}. Recipient: ${cleanPhone}`);
