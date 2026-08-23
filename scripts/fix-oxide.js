@@ -8,25 +8,7 @@ try {
   console.log('[@tailwindcss/oxide] Native binding is loaded and working correctly.');
 } catch (error) {
   console.warn('[@tailwindcss/oxide] Native binding failed to load:', error.message);
-  console.log('[@tailwindcss/oxide] Attempting to patch or install native binding...');
-
-  const oxideIndexpath = path.join(__dirname, '..', 'node_modules', '@tailwindcss', 'oxide', 'index.js');
-  if (fs.existsSync(oxideIndexpath)) {
-    try {
-      let content = fs.readFileSync(oxideIndexpath, 'utf8');
-      // Patch the throw error on missing native binding to use a safe fallback stub
-      if (content.includes('throw new Error(`Cannot find native binding')) {
-        content = content.replace(
-          /if \(!nativeBinding\) {\s*if \(loadErrors\.length > 0\) {[\s\S]*?}\s*throw new Error\(`Failed to load native binding`\)\s*}/,
-          `if (!nativeBinding) {\n  console.warn('[@tailwindcss/oxide] Using safe JS fallback stub for native binding.');\n  nativeBinding = {\n    Scanner: class {\n      scan() { return []; }\n    },\n    transform() { return ''; }\n  };\n}`
-        );
-        fs.writeFileSync(oxideIndexpath, content, 'utf8');
-        console.log('[@tailwindcss/oxide] Successfully patched index.js with safe fallback stub.');
-      }
-    } catch (patchErr) {
-      console.error('[@tailwindcss/oxide] Failed to patch index.js:', patchErr.message);
-    }
-  }
+  console.log('[@tailwindcss/oxide] Attempting to install native binding...');
 
   const platform = process.platform;
   const arch = process.arch;
