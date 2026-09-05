@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { GoogleGenAI } from "@google/genai";
+import { MsEdgeTTS, OUTPUT_FORMAT } from "msedge-tts";
 import { initializeApp as initServerFirebase } from 'firebase/app';
 import { getFirestore as getServerFirestore, collection as getServerCollection, getDocs as getServerDocs, query as getServerQuery, where as getServerWhere, doc as getServerDoc, getDoc as getServerDocSnap } from 'firebase/firestore';
 import { 
@@ -62,18 +63,113 @@ async function startServer() {
     });
   });
 
-  // API Routes
+  // API Routes with Multi-Provider (Gemini + OpenRouter) & Multi-Model Cascade
   const handleGeminiGenerate: express.RequestHandler = async (req, res) => {
+    const startTime = Date.now();
     try {
-      const { prompt, systemInstruction, tools, config, contents } = req.body;
-      const apiKey = process.env.GEMINI_API_KEY;
+      const { 
+        prompt, 
+        systemInstruction, 
+        tools, 
+        config, 
+        contents,
+        apiProvider = 'gemini',
+        customApiKey,
+        openrouterApiKey,
+        openrouterModel
+      } = req.body;
+
+      // Check if OpenRouter is explicitly requested
+      const effectiveOpenRouterKey = openrouterApiKey || (req.headers['x-openrouter-key'] as string);
+      if (apiProvider === 'openrouter') {
+        if (!effectiveOpenRouterKey || !effectiveOpenRouterKey.trim()) {
+          return res.status(400).json({ 
+            success: false, 
+            error: 'OpenRouter এপিআই চাবি (API Key) কনফিগার করা হয়নি। অনুগ্রহ করে আপনার OpenRouter Key প্রদান করুন।' 
+          });
+        }
+
+        try {
+          const selectedModel = openrouterModel || 'deepseek/deepseek-chat';
+          const messages: any[] = [];
+          if (systemInstruction) {
+            messages.push({ role: 'system', content: systemInstruction });
+          }
+          if (contents && Array.isArray(contents)) {
+            for (const c of contents) {
+              const textContent = c.parts?.map((p: any) => p.text || '').join(' ') || '';
+              messages.push({
+                role: c.role === 'model' || c.role === 'assistant' ? 'assistant' : 'user',
+                content: textContent
+              });
+            }
+          } else if (prompt) {
+            messages.push({ role: 'user', content: prompt });
+          }
+
+          const openRouterRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${effectiveOpenRouterKey.trim()}`,
+              'Content-Type': 'application/json',
+              'HTTP-Referer': 'https://shopmaster-pos.local',
+              'X-Title': 'ShopMaster POS AI'
+            },
+            body: JSON.stringify({
+              model: selectedModel,
+              messages: messages,
+              temperature: config?.generationConfig?.temperature ?? 0.7
+            })
+          });
+
+          if (openRouterRes.ok) {
+            const orData: any = await openRouterRes.json();
+            const replyText = orData.choices?.[0]?.message?.content || '';
+            const latencyMs = Date.now() - startTime;
+            return res.json({ 
+              success: true, 
+              text: replyText, 
+              provider: 'OpenRouter', 
+              model: selectedModel, 
+              latencyMs 
+            });
+          } else {
+            const errText = await openRouterRes.text();
+            let parsedErrMsg = errText;
+            try {
+              const errJson = JSON.parse(errText);
+              parsedErrMsg = errJson.error?.message || errJson.message || errText;
+            } catch (_) {}
+            return res.status(400).json({ 
+              success: false, 
+              error: `OpenRouter সংযোগ ব্যর্থ (${openRouterRes.status}): ${parsedErrMsg}`,
+              provider: 'OpenRouter',
+              model: selectedModel
+            });
+          }
+        } catch (orErr: any) {
+          console.error('[OpenRouter API] Connection failure:', orErr);
+          return res.status(500).json({ 
+            success: false, 
+            error: `OpenRouter নেটওয়ার্ক ত্রুটি: ${orErr.message || 'সার্ভারে সংযোগ করা যায়নি'}`,
+            provider: 'OpenRouter'
+          });
+        }
+      }
+
+      // Gemini Provider Logic
+      const headerCustomKey = req.headers['x-custom-api-key'] as string;
+      const apiKey = (customApiKey && String(customApiKey).trim()) || headerCustomKey || process.env.GEMINI_API_KEY;
       
-      if (!apiKey) {
-        return res.status(500).json({ error: 'GEMINI_API_KEY is not configured on server' });
+      if (!apiKey || !apiKey.trim()) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Google Gemini এপিআই চাবি (API Key) কনফিগার করা হয়নি। অনুগ্রহ করে আপনার Gemini API Key প্রদান করুন।' 
+        });
       }
 
       const ai = new GoogleGenAI({ 
-        apiKey: apiKey,
+        apiKey: apiKey.trim(),
         httpOptions: {
           headers: {
             'User-Agent': 'aistudio-build',
@@ -81,77 +177,236 @@ async function startServer() {
         }
       });
       
-      let modelToUse = config?.model || "gemini-3.5-flash";
-      if (modelToUse.includes("gemini-1.5") || modelToUse === "gemini-flash-latest") {
-        modelToUse = "gemini-3.5-flash";
-      }
+      // Cascade list of valid, high-availability Gemini models in order of preference
+      const requestedModel = config?.model || "gemini-3.1-flash-lite";
+      const modelCascade = [
+        requestedModel,
+        "gemini-3.1-flash-lite",
+        "gemini-3.8-flash",
+        "gemini-3.1-pro-preview"
+      ].filter((m, i, arr) => m && arr.indexOf(m) === i && !m.includes("gemini-1.5") && !m.includes("gemini-2.0") && !m.includes("gemini-2.5"));
 
-      let response;
-      try {
-        response = await ai.models.generateContent({ 
-          model: modelToUse,
-          contents: contents || [{ role: 'user', parts: [{ text: prompt }] }],
-          config: {
-            systemInstruction: systemInstruction,
-            tools: tools,
-            ...(config?.generationConfig || {})
-          }
-        });
-      } catch (innerError: any) {
-        const errorStr = String(innerError.message || innerError.status || JSON.stringify(innerError) || '');
-        const isQuotaOrPaidError = errorStr.includes('429') || 
-                                   errorStr.toLowerCase().includes('quota') || 
-                                   errorStr.includes('RESOURCE_EXHAUSTED') ||
-                                   errorStr.toLowerCase().includes('limit');
-                                   
-        if (isQuotaOrPaidError && modelToUse !== 'gemini-3.5-flash') {
-          console.warn(`[Gemini Fallback] Quota exceeded or paid flow required for ${modelToUse}. Falling back to gemini-3.5-flash.`);
-          
-          // Clean up config for gemini-3.5-flash (remove thinkingConfig)
-          const cleanConfig = { ...config?.generationConfig };
-          if (cleanConfig.thinkingConfig) {
-            delete cleanConfig.thinkingConfig;
-          }
-          
-          response = await ai.models.generateContent({ 
-            model: 'gemini-3.5-flash',
-            contents: contents || [{ role: 'user', parts: [{ text: prompt }] }],
-            config: {
-              systemInstruction: systemInstruction,
-              tools: tools,
-              ...cleanConfig
-            }
-          });
-        } else {
-          throw innerError;
+      // Sanitize tools: Gemini 3 series supports combining googleSearch with function calling via toolConfig
+      let sanitizedTools = tools;
+      let toolConfigParam: any = undefined;
+      if (Array.isArray(sanitizedTools)) {
+        const hasFunctionDeclarations = sanitizedTools.some((t: any) => t && t.functionDeclarations);
+        const hasGoogleSearch = sanitizedTools.some((t: any) => t && (t.googleSearch || t.googleMaps));
+        if (hasFunctionDeclarations && hasGoogleSearch) {
+          toolConfigParam = { includeServerSideToolInvocations: true };
         }
       }
 
-      res.json({ 
-        text: response.text,
-        functionCalls: response.functionCalls
+      let response: any = null;
+      let lastError: any = null;
+      let usedModel = requestedModel;
+
+      for (const currentModel of modelCascade) {
+        try {
+          const cleanConfig = { ...config?.generationConfig };
+          // Remove thinkingConfig for non-thinking models
+          if (cleanConfig.thinkingConfig && !currentModel.includes('thinking')) {
+            delete cleanConfig.thinkingConfig;
+          }
+
+          const modelConfig: any = {
+            systemInstruction: systemInstruction,
+            tools: sanitizedTools,
+            ...cleanConfig
+          };
+
+          if (toolConfigParam) {
+            modelConfig.toolConfig = toolConfigParam;
+          }
+
+          response = await ai.models.generateContent({ 
+            model: currentModel,
+            contents: contents || [{ role: 'user', parts: [{ text: prompt }] }],
+            config: modelConfig
+          });
+
+          if (response && (response.text || response.functionCalls)) {
+            usedModel = currentModel;
+            break;
+          }
+        } catch (innerError: any) {
+          lastError = innerError;
+          const errorStr = String(innerError.message || innerError.status || JSON.stringify(innerError) || '');
+          console.warn(`[Gemini Cascade] Model ${currentModel} returned: ${errorStr.slice(0, 150)}. Cascading to next available model...`);
+          // If combining tools failed on a specific model, try stripping googleSearch if functionDeclarations are present
+          if (Array.isArray(sanitizedTools) && sanitizedTools.some((t: any) => t && t.functionDeclarations)) {
+            sanitizedTools = sanitizedTools.filter((t: any) => t && !t.googleSearch && !t.googleMaps && !t.codeExecution);
+            toolConfigParam = undefined;
+          }
+          continue;
+        }
+      }
+
+      if (response) {
+        const latencyMs = Date.now() - startTime;
+        const groundingMetadata = response.candidates?.[0]?.groundingMetadata || null;
+        return res.json({ 
+          success: true,
+          text: response.text,
+          functionCalls: response.functionCalls,
+          groundingMetadata: groundingMetadata,
+          provider: 'Google Gemini',
+          model: usedModel,
+          latencyMs
+        });
+      }
+
+      // If all models in the cascade failed due to quota/rate limit:
+      const lastErrStr = String(lastError?.message || lastError?.status || '');
+      const isOverallQuota = lastErrStr.includes('429') || 
+                            lastErrStr.toLowerCase().includes('quota') || 
+                            lastErrStr.includes('RESOURCE_EXHAUSTED') ||
+                            lastErrStr.toLowerCase().includes('limit');
+
+      if (isOverallQuota) {
+        console.warn('[Gemini Cascade] All cloud models reached quota limits.');
+        return res.status(429).json({ 
+          success: false,
+          quotaExceeded: true,
+          offlineFallback: true,
+          text: "",
+          error: 'Google Gemini এপিআই কোটা সীমা পূর্ণ হয়েছে (Quota Limit Exhausted)। অনুগ্রহ করে অন্য এপিআই কি ব্যবহার করুন অথবা ওপেনরাউটার প্রোভাইডার সিলেক্ট করুন।'
+        });
+      }
+
+      // If other server error
+      res.status(500).json({ 
+        success: false,
+        error: lastError?.message || 'Gemini এপিআই প্রসেসিং ব্যর্থ হয়েছে। এপিআই চাবি সঠিক কিনা যাচাই করুন।' 
       });
     } catch (error: any) {
       console.error('Gemini API Error:', error);
-      let errorMsg = error.message || 'Internal Server Error';
+      let errorMsg = error.message || 'অভ্যন্তরীণ সার্ভার ত্রুটি';
       const isQuota = errorMsg.includes('429') || 
                       errorMsg.toLowerCase().includes('quota') || 
                       errorMsg.includes('RESOURCE_EXHAUSTED') ||
                       errorMsg.toLowerCase().includes('limit');
       
       if (isQuota) {
-        res.status(429).json({ error: 'QUOTA_EXCEEDED', message: 'You have exceeded your Gemini API quota. Please check your plan or try again later.' });
+        res.status(429).json({ 
+          success: false,
+          quotaExceeded: true, 
+          offlineFallback: true, 
+          text: "", 
+          error: 'Gemini এপিআই কোটা নিঃশেষ হয়েছে।' 
+        });
       } else {
         if (errorMsg.includes('503') || errorMsg.includes('high demand') || errorMsg.includes('UNAVAILABLE')) {
-          errorMsg = 'AI Model is currently experiencing high demand. Please try again in a few moments.';
+          errorMsg = 'এআই মডেল বর্তমানে অতিরিক্ত লোডে আছে। অনুগ্রহ করে কয়েক সেকেন্ড পর আবার চেষ্টা করুন।';
         }
-        res.status(500).json({ error: errorMsg });
+        res.status(500).json({ success: false, error: errorMsg });
       }
     }
   };
 
   app.post('/api/gemini/generate', handleGeminiGenerate);
   app.post('/api/gemini/voice-parse', handleGeminiGenerate);
+
+  // In-memory TTS Cache to make repeated phrases (demos, greetings, common queries) load instantaneously (<10ms)
+  const ttsAudioCache = new Map<string, { buffer: Buffer; contentType: string; timestamp: number }>();
+
+  // Universal Microsoft Edge Neural Bangla TTS Streaming Endpoint (100% Real Human Voice for Habib & Ruhi)
+  app.get('/api/tts/stream', async (req, res) => {
+    try {
+      const text = String(req.query.text || '').trim();
+      const persona = String(req.query.persona || 'habib').toLowerCase().trim();
+      const lang = String(req.query.lang || 'bn').trim();
+      
+      if (!text) {
+        return res.status(400).send('Text is required');
+      }
+
+      // Safe clean text
+      const cleanChunk = text.replace(/[\n\r\t]+/g, ' ').slice(0, 350);
+      const cacheKey = `${persona}:${lang}:${cleanChunk}`;
+
+      // Check Cache
+      const cached = ttsAudioCache.get(cacheKey);
+      if (cached && (Date.now() - cached.timestamp < 3600000 * 24)) {
+        res.setHeader('Content-Type', cached.contentType);
+        res.setHeader('Content-Length', cached.buffer.length);
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        return res.send(cached.buffer);
+      }
+
+      // Select Microsoft Edge Neural Voice
+      // Habib: Authentic Bangladeshi Male Voice (bn-BD-PradeepNeural)
+      // Ruhi: Authentic Bangladeshi Female Voice (bn-BD-NabanitaNeural)
+      const selectedVoice = persona === 'ruhi' ? 'bn-BD-NabanitaNeural' : 'bn-BD-PradeepNeural';
+
+      // 1. Try Microsoft Edge Neural Audio Buffer
+      try {
+        const edgeTTS = new MsEdgeTTS();
+        await edgeTTS.setMetadata(selectedVoice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
+        const { audioStream } = edgeTTS.toStream(cleanChunk);
+        
+        const audioBuffer: Buffer = await new Promise((resolve, reject) => {
+          const chunks: Buffer[] = [];
+          const timeout = setTimeout(() => {
+            try { (audioStream as any).destroy?.(); } catch (_) {}
+            reject(new Error('EdgeTTS Stream timeout'));
+          }, 6000);
+
+          audioStream.on('data', (chunk: Buffer) => chunks.push(chunk));
+          audioStream.on('end', () => {
+            clearTimeout(timeout);
+            resolve(Buffer.concat(chunks));
+          });
+          audioStream.on('error', (err: any) => {
+            clearTimeout(timeout);
+            reject(err);
+          });
+        });
+
+        if (audioBuffer && audioBuffer.length > 0) {
+          // Cache successful buffer
+          if (ttsAudioCache.size > 200) {
+            const firstKey = ttsAudioCache.keys().next().value;
+            if (firstKey) ttsAudioCache.delete(firstKey);
+          }
+          ttsAudioCache.set(cacheKey, { buffer: audioBuffer, contentType: 'audio/mpeg', timestamp: Date.now() });
+
+          res.setHeader('Content-Type', 'audio/mpeg');
+          res.setHeader('Content-Length', audioBuffer.length);
+          res.setHeader('Cache-Control', 'public, max-age=86400');
+          return res.send(audioBuffer);
+        }
+      } catch (edgeError) {
+        console.warn('[Edge TTS Fallback Triggered]:', edgeError);
+      }
+
+      // 2. Secondary fallback stream if edge websocket encounters interruption
+      const googleTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(cleanChunk)}&tl=${lang}&client=tw-ob`;
+      const ttsResponse = await fetch(googleTtsUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          'Referer': 'https://translate.google.com/'
+        }
+      });
+
+      if (!ttsResponse.ok) {
+        return res.status(ttsResponse.status).send('Failed to fetch audio stream');
+      }
+
+      const rawArrayBuf = await ttsResponse.arrayBuffer();
+      const fbBuffer = Buffer.from(rawArrayBuf);
+
+      ttsAudioCache.set(cacheKey, { buffer: fbBuffer, contentType: 'audio/mpeg', timestamp: Date.now() });
+
+      res.setHeader('Content-Type', 'audio/mpeg');
+      res.setHeader('Content-Length', fbBuffer.length);
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.send(fbBuffer);
+    } catch (err: any) {
+      console.error('[TTS Stream Error]:', err);
+      res.status(500).send('TTS Streaming error: ' + err.message);
+    }
+  });
 
   // Serve approved feedback reviews for public homepage consumption with CORS support
   app.options('/api/public/reviews', (req, res) => {
