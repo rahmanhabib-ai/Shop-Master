@@ -22,7 +22,9 @@ import {
   Plus,
   Eye,
   EyeOff,
-  X
+  QrCode,
+  X,
+  Unlink
 } from 'lucide-react';
 
 interface MessagingGatewayProps {
@@ -81,7 +83,16 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
   const [metaAccessToken, setMetaAccessToken] = useState<string>(settings.meta_access_token || '');
   const [metaWabaId, setMetaWabaId] = useState<string>(settings.meta_waba_id || '');
   const [showMetaToken, setShowMetaToken] = useState<boolean>(false);
-  const [showHelpModal, setShowHelpModal] = useState<'baileys' | 'meta' | null>(null);
+  const [showHelpModal, setShowHelpModal] = useState<'baileys' | 'meta' | 'httpsms' | null>(null);
+
+  // Seller SMS (In-House Android SIM Gateway) State
+  const [pairedSmsDevice, setPairedSmsDevice] = useState<any>(null);
+  const [isConnectingHttpSms, setIsConnectingHttpSms] = useState<boolean>(false);
+  const [httpSmsTestPhone, setHttpSmsTestPhone] = useState<string>('');
+  const [httpSmsTestSending, setHttpSmsTestSending] = useState<boolean>(false);
+  const [httpSmsTestStatus, setHttpSmsTestStatus] = useState<string | null>(null);
+  const [httpSmsTestError, setHttpSmsTestError] = useState<string | null>(null);
+  const [httpSmsStatus, setHttpSmsStatus] = useState<'connected' | 'disconnected' | 'checking'>(settings.httpsms_status || 'disconnected');
   
   // Baileys & Zender SaaS Integration State
   const [baileysPhone, setBaileysPhone] = useState<string>(settings.baileys_phone || '');
@@ -89,7 +100,11 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
   const [zenderSmsDeviceId, setZenderSmsDeviceId] = useState<string>(settings.zender_sms_device_id || '');
   const [whatsappStatus, setWhatsappStatus] = useState<'connected' | 'disconnected'>(settings.whatsapp_status || 'disconnected');
   const [smsStatus, setSmsStatus] = useState<'active' | 'disabled'>(settings.sms_status || 'disabled');
-  const [defaultRoute, setDefaultRoute] = useState<'whatsapp' | 'sms' | 'manual_redirect'>(settings.default_route || 'whatsapp');
+  const [whatsappEnabled, setWhatsappEnabled] = useState<boolean>(settings.whatsapp_enabled !== false);
+  const [smsEnabled, setSmsEnabled] = useState<boolean>(settings.sms_enabled !== false);
+  const [defaultRoute, setDefaultRoute] = useState<'whatsapp_sms_fallback' | 'whatsapp' | 'sms' | 'dual' | 'manual_redirect'>(
+    (settings.default_route as any) || 'whatsapp_sms_fallback'
+  );
 
   // Manual API Configuration Credentials
   const [zenderEndpointUrl, setZenderEndpointUrl] = useState<string>('https://app.sellerscampus.com/api/v1');
@@ -139,11 +154,14 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
       setZenderSmsDeviceId(shopSettings.zender_sms_device_id || '');
       setWhatsappStatus(shopSettings.whatsapp_status || 'disconnected');
       setSmsStatus(shopSettings.sms_status || 'disabled');
-      setDefaultRoute(shopSettings.default_route || 'whatsapp');
+      if (shopSettings.whatsapp_enabled !== undefined) setWhatsappEnabled(shopSettings.whatsapp_enabled);
+      if (shopSettings.sms_enabled !== undefined) setSmsEnabled(shopSettings.sms_enabled);
+      setDefaultRoute(shopSettings.default_route || 'whatsapp_sms_fallback');
       setSmsType(shopSettings.smsGatewayType || 'none');
       setSmsApiKey(shopSettings.smsApiKey || '');
       setSmsSenderId(shopSettings.smsSenderId || '');
       setSmsEndpoint(shopSettings.smsEndpoint || '');
+      if (shopSettings.httpsms_status) setHttpSmsStatus(shopSettings.httpsms_status);
       
       // Manual Credentials Sync
       setZenderEndpointUrl('https://app.sellerscampus.com/api/v1');
@@ -204,6 +222,28 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
       return;
     }
 
+    // Check Paired Android SMS Gateway Status
+    try {
+      const smsRes = await fetch(`/api/sms/paired-status?merchantId=${shopIdToCheck}`);
+      const smsData = await smsRes.json();
+      if (smsData.success && smsData.status === 'connected' && smsData.device) {
+        setHttpSmsStatus('connected');
+        setPairedSmsDevice(smsData.device);
+        if (settings.httpsms_status !== 'connected') {
+          onSaveSettings({
+            ...settings,
+            httpsms_status: 'connected',
+            sms_status: 'active'
+          });
+        }
+      } else {
+        setHttpSmsStatus('disconnected');
+        setPairedSmsDevice(null);
+      }
+    } catch (e) {
+      console.warn("SMS Paired status sync warning:", e);
+    }
+
     if (waType !== 'zender' && waType !== 'walink') return;
     
     const deviceIdToCheck = forcedDeviceId || zenderDeviceId || settings.zender_whatsapp_device_id || zenderWaDeviceId;
@@ -249,9 +289,23 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
   React.useEffect(() => {
     fetchCurrentConnectionStatus();
     
-    // Periodically poll every 10 seconds to keep system database in sync (faster response to unlinks)
-    const statusInterval = setInterval(fetchCurrentConnectionStatus, 10000);
-    return () => clearInterval(statusInterval);
+    // Smart Adaptive Polling: Only poll when tab is visible to prevent unnecessary rate limiting and network load
+    const statusInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      fetchCurrentConnectionStatus();
+    }, 15000);
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchCurrentConnectionStatus();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(statusInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [fetchCurrentConnectionStatus]);
 
   // Set up a useEffect interval that calls fetchCurrentConnectionStatus every 3 seconds ONLY while the QR modal is open
@@ -721,6 +775,99 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
     }
   };
 
+  // Seller SMS (In-House Android SIM Gateway) Handlers
+  const handleTestHttpSmsConnection = async () => {
+    setIsConnectingHttpSms(true);
+    setHttpSmsTestError(null);
+    setHttpSmsTestStatus(null);
+    try {
+      const res = await fetch(`/api/sms/paired-status?merchantId=${shopId}`);
+      const data = await res.json();
+      if (res.ok && data.success && data.status === 'connected') {
+        setHttpSmsStatus('connected');
+        setPairedSmsDevice(data.device);
+        setHttpSmsTestStatus(`✓ আপনার ফোন (${data.device?.phoneModel || 'Android Phone'}) সফলভাবে কানেক্টেড রয়েছে!`);
+        onSaveSettings({
+          ...settings,
+          httpsms_status: 'connected',
+          sms_status: 'active'
+        });
+      } else {
+        setHttpSmsStatus('disconnected');
+        setPairedSmsDevice(null);
+        setHttpSmsTestError('কোনো অ্যান্ড্রয়েড ফোন কানেক্টেড নেই। ফোনের Seller SMS অ্যাপ দিয়ে নিচের কিউআর কোডটি স্ক্যান করুন।');
+      }
+    } catch (e: any) {
+      setHttpSmsStatus('disconnected');
+      setHttpSmsTestError('কানেকশন এরর: ' + e.message);
+    } finally {
+      setIsConnectingHttpSms(false);
+    }
+  };
+
+  const handleSendHttpSmsTestMessage = async () => {
+    if (!httpSmsTestPhone) {
+      setHttpSmsTestError('অনুগ্রহ করে টেস্ট করার জন্য একটি প্রাপকের মোবাইল নম্বর দিন।');
+      return;
+    }
+    setHttpSmsTestSending(true);
+    setHttpSmsTestStatus(null);
+    setHttpSmsTestError(null);
+    try {
+      const res = await fetch('/api/sms/test-send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          merchantId: shopId,
+          to: httpSmsTestPhone,
+          content: '🧪 টেস্ট এসএমএস: আপনার নিজস্ব Seller SMS অ্যান্ড্রয়েড গেটওয়ে সফলভাবে কনফিগার হয়েছে এবং কাজ করছে!'
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setHttpSmsTestStatus(`✓ টেস্ট এসএমএস সফলভাবে ডিসপ্যাচ হয়েছে (সিম: ${data.senderPhone || 'SIM 1'})!`);
+        // Add to logs table
+        setLogs(prev => [
+          {
+            id: 'log-' + Date.now(),
+            recipient: 'Test Recipient',
+            phone: httpSmsTestPhone,
+            content: '🧪 টেস্ট এসএমএস: আপনার নিজস্ব Seller SMS অ্যান্ড্রয়েড গেটওয়ে সফলভাবে কনফিগার হয়েছে!',
+            gateway: 'sms',
+            status: 'delivered',
+            time: 'Just now'
+          },
+          ...prev
+        ]);
+      } else {
+        setHttpSmsTestError(data.error || 'এসএমএস পাঠাতে ব্যর্থ হয়েছে। আপনার অ্যান্ড্রয়েড অ্যাপ এবং সিমে ব্যালেন্স চেক করুন।');
+      }
+    } catch (e: any) {
+      setHttpSmsTestError('এসএমএস প্রেরণে সমস্যা: ' + e.message);
+    } finally {
+      setHttpSmsTestSending(false);
+    }
+  };
+
+  const handleUnlinkSmsDevice = async () => {
+    try {
+      await fetch('/api/sms/unlink-device', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ merchantId: shopId })
+      });
+      setHttpSmsStatus('disconnected');
+      setPairedSmsDevice(null);
+      onSaveSettings({
+        ...settings,
+        httpsms_status: 'disconnected'
+      });
+      setHttpSmsTestStatus(null);
+    } catch (e: any) {
+      console.error('Error unlinking SMS device:', e);
+    }
+  };
+
   // SMS Configuration State
   const [smsType, setSmsType] = useState<string>(settings.smsGatewayType || 'none');
   const [smsApiKey, setSmsApiKey] = useState<string>(settings.smsApiKey || '');
@@ -787,6 +934,7 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
         smsApiKey: smsApiKey,
         smsSenderId: smsSenderId,
         smsEndpoint: smsEndpoint,
+        httpsms_status: httpSmsStatus,
         saleTemplate: saleTemplate,
         dueTemplate: dueTemplate,
         globalTemplateEn: globalTemplateEn,
@@ -795,6 +943,8 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
         zender_sms_device_id: zenderSmsDeviceId,
         whatsapp_status: whatsappStatus,
         sms_status: smsStatus,
+        whatsapp_enabled: whatsappEnabled,
+        sms_enabled: smsEnabled,
         default_route: defaultRoute,
         zender_endpoint_url: zenderEndpointUrl,
         zender_api_key: zenderApiKey,
@@ -856,6 +1006,10 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
           body: JSON.stringify({
             gatewayConfig: {
               default_route: broadcastMethod,
+              smsGatewayType: smsType,
+              smsApiKey: smsApiKey,
+              smsSenderId: smsSenderId,
+              smsEndpoint: smsEndpoint,
               zender_whatsapp_device_id: zenderDeviceId || zenderWaDeviceId || settings.zender_whatsapp_device_id,
               zender_sms_device_id: smsSenderId || settings.smsSenderId,
               zender_api_key: zenderApiKey || waLinkSecret || settings.zender_api_key || settings.smsApiKey || settings.waToken,
@@ -1074,31 +1228,85 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
                 </div>
 
                 {/* Primary Default Route Selection Indicator */}
-                <div className="bg-slate-50/50 dark:bg-slate-950/20 p-5 rounded-3xl border border-gray-100 dark:border-slate-800/80 mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                  <div>
-                    <h3 className="font-extrabold text-sm text-gray-950 dark:text-gray-100">Primary Dispatch Method</h3>
-                    <p className="text-[11px] text-gray-400 font-medium">ইনভয়েস এবং নোটিফিকেশন পাঠানোর প্রধান চ্যানেল নির্ধারণ করুন</p>
+                <div className="bg-gradient-to-br from-slate-50 to-indigo-50/40 dark:from-slate-950/40 dark:to-indigo-950/20 p-6 rounded-3xl border border-indigo-100/80 dark:border-slate-800 mb-6 space-y-4 shadow-sm">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-indigo-100/50 dark:border-slate-800 pb-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-black text-base text-gray-950 dark:text-gray-100">Primary Dispatch & Routing Method</h3>
+                        <span className="text-[10px] bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+                          Smart Dispatch Hub
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-0.5">
+                        ইনভয়েস ও বকেয়া নোটিফিকেশন পাঠানোর প্রধান চ্যানেল ও অটো-ফলব্যাক মোড নির্ধারণ করুন
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex gap-2">
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {[
-                      { id: 'whatsapp', label: '✓ WhatsApp Gateway Active', color: 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/30' }
+                      {
+                        id: 'whatsapp_sms_fallback',
+                        title: '🌟 স্মার্ট অটো-ফলব্যাক (WhatsApp ➔ SMS Fallback)',
+                        badge: 'ডিফল্ট ও রিকমেন্ডেড',
+                        badgeColor: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
+                        desc: '১ম প্রায়োরিটি হোয়াটসঅ্যাপ। কাস্টমারের হোয়াটসঅ্যাপ না থাকলে বা কোনো কারণে ফেইল হলে স্বয়ংক্রিয়ভাবে ফোনের সিম থেকে SMS যাবে।',
+                        activeBorder: 'border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/30 text-emerald-950 dark:text-emerald-200 ring-2 ring-emerald-500'
+                      },
+                      {
+                        id: 'whatsapp',
+                        title: '💬 শুধু হোয়াটসঅ্যাপ (WhatsApp Only)',
+                        badge: '100% Free',
+                        badgeColor: 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300',
+                        desc: 'ইনভয়েস ও রিমাইন্ডার শুধুমাত্র হোয়াটসঅ্যাপের (Baileys বা Meta API) মাধ্যমে পাঠানো হবে। সিম এসএমএস পাঠানো হবে না।',
+                        activeBorder: 'border-indigo-500 bg-indigo-50/70 dark:bg-indigo-950/30 text-indigo-950 dark:text-indigo-200 ring-2 ring-indigo-500'
+                      },
+                      {
+                        id: 'sms',
+                        title: '📱 শুধু অ্যান্ড্রয়েড মোবাইল SMS (Android SMS Only)',
+                        badge: 'Direct SIM SMS',
+                        badgeColor: 'bg-blue-500/15 text-blue-700 dark:text-blue-300',
+                        desc: 'সরাসরি আপনার সংযুক্ত অ্যান্ড্রয়েড ফোনের সিম কার্ড থেকে কাস্টমারদের নম্বরে টেক্সট SMS চলে যাবে।',
+                        activeBorder: 'border-blue-500 bg-blue-50/70 dark:bg-blue-950/30 text-blue-950 dark:text-blue-200 ring-2 ring-blue-500'
+                      },
+                      {
+                        id: 'dual',
+                        title: '🚀 ডুয়াল চ্যানেল (WhatsApp + SMS একসাথে)',
+                        badge: 'Maximum Delivery',
+                        badgeColor: 'bg-purple-500/15 text-purple-700 dark:text-purple-300',
+                        desc: 'একই সাথে ব্যাকগ্রাউন্ডে হোয়াটসঅ্যাপ এবং অ্যান্ড্রয়েড সিম SMS উভয়েই একসাথে মেসেজ ডেলিভার করবে।',
+                        activeBorder: 'border-purple-500 bg-purple-50/70 dark:bg-purple-950/30 text-purple-950 dark:text-purple-200 ring-2 ring-purple-500'
+                      }
                     ].map(route => (
                       <button
                         key={route.id}
+                        type="button"
                         onClick={() => {
                           setDefaultRoute(route.id as any);
                           onSaveSettings({
                             ...settings,
-                            default_route: route.id
+                            default_route: route.id,
+                            whatsapp_enabled: whatsappEnabled,
+                            sms_enabled: smsEnabled
                           });
                         }}
-                        className={`px-3.5 py-2 rounded-xl border text-xs font-bold tracking-tight transition-all cursor-pointer ${
+                        className={`p-4 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2 shadow-sm ${
                           defaultRoute === route.id
-                            ? `${route.color} ring-2 ring-emerald-500`
-                            : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-800 text-gray-500 dark:text-gray-400 hover:text-gray-900'
+                            ? route.activeBorder
+                            : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-800 text-gray-700 dark:text-slate-300 hover:border-indigo-300'
                         }`}
                       >
-                        {route.label}
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-extrabold text-xs flex items-center gap-1.5">
+                            {route.title}
+                          </span>
+                          <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase shrink-0 ${route.badgeColor}`}>
+                            {route.badge}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
+                          {route.desc}
+                        </p>
                       </button>
                     ))}
                   </div>
@@ -1108,26 +1316,55 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
                   {/* WhatsApp Hub Container */}
                   <div className="bg-slate-50/60 dark:bg-slate-950/30 p-6 rounded-3xl border border-gray-100 dark:border-slate-850 space-y-5">
                     {/* Header */}
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="flex items-center gap-3.5">
                         <div className="w-12 h-12 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-2xl flex items-center justify-center font-bold text-base shadow-sm">
                           WA
                         </div>
                         <div>
-                          <h3 className="font-black text-base text-gray-900 dark:text-white">WhatsApp Messaging Gateway</h3>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-black text-base text-gray-900 dark:text-white">WhatsApp Messaging Gateway</h3>
+                            <span className="text-[10px] bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                              Chat & Invoices
+                            </span>
+                          </div>
                           <p className="text-xs text-gray-400 font-medium">স্বয়ংক্রিয় হোয়াটসঅ্যাপ বার্তা প্রেরণের টেকনোলজি নির্বাচন করুন</p>
                         </div>
                       </div>
                       
-                      {whatsappStatus === 'connected' ? (
-                        <span className="flex items-center gap-1.5 text-xs font-bold uppercase text-emerald-600 dark:text-emerald-400 bg-emerald-100/60 dark:bg-emerald-950/40 px-3 py-1 rounded-full border border-emerald-200/50 dark:border-emerald-800/40">
-                          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span> Connected
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1.5 text-xs font-bold uppercase text-gray-400 bg-gray-100 dark:bg-slate-800 px-3 py-1 rounded-full border border-gray-200 dark:border-slate-700">
-                          Disconnected
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2.5 self-end sm:self-center">
+                        {/* Independent Enable / Disable Toggle */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nextVal = !whatsappEnabled;
+                            setWhatsappEnabled(nextVal);
+                            onSaveSettings({
+                              ...settings,
+                              whatsapp_enabled: nextVal,
+                              whatsapp_status: nextVal ? whatsappStatus : 'disconnected'
+                            });
+                          }}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border shadow-sm ${
+                            whatsappEnabled
+                              ? 'bg-emerald-600 text-white border-emerald-600'
+                              : 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-slate-700'
+                          }`}
+                        >
+                          <span className={`w-2 h-2 rounded-full ${whatsappEnabled ? 'bg-white animate-pulse' : 'bg-gray-400'}`}></span>
+                          {whatsappEnabled ? 'WhatsApp Active' : 'WhatsApp Disabled'}
+                        </button>
+
+                        {whatsappStatus === 'connected' ? (
+                          <span className="flex items-center gap-1.5 text-xs font-bold uppercase text-emerald-600 dark:text-emerald-400 bg-emerald-100/60 dark:bg-emerald-950/40 px-3 py-1.5 rounded-xl border border-emerald-200/50 dark:border-emerald-800/40">
+                            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span> Connected
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1.5 text-xs font-bold uppercase text-gray-400 bg-gray-100 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-slate-700">
+                            Disconnected
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {/* Dual Gateway Selector Tabs */}
@@ -1376,6 +1613,281 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
                         {testMsgError && (
                           <p className="text-xs text-rose-500 bg-rose-50 dark:bg-rose-950/20 border border-rose-100 p-2.5 rounded-xl font-bold">
                             {testMsgError}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Seller SMS / Android SIM Gateway Container */}
+                  <div className="bg-slate-50/60 dark:bg-slate-950/30 p-6 rounded-3xl border border-gray-100 dark:border-slate-850 space-y-5">
+                    {/* Header */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-3.5">
+                        <div className="w-12 h-12 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center font-bold text-base shadow-sm">
+                          SMS
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-black text-base text-gray-900 dark:text-white">Android SIM Gateway (Seller SMS)</h3>
+                            <span className="text-[10px] bg-blue-500/15 text-blue-700 dark:text-blue-300 font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                              In-House QR Pairing
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-400 font-medium">আপনার নিজস্ব অ্যান্ড্রয়েড ফোনের সিম কার্ড ব্যবহার করে সরাসরি কাস্টমারকে SMS পাঠান</p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2.5 self-end sm:self-center">
+                        {/* Independent Enable / Disable Toggle */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nextVal = !smsEnabled;
+                            setSmsEnabled(nextVal);
+                            onSaveSettings({
+                              ...settings,
+                              sms_enabled: nextVal,
+                              sms_status: nextVal ? 'active' : 'disabled',
+                              httpsms_status: nextVal ? httpSmsStatus : 'disconnected'
+                            });
+                          }}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border shadow-sm ${
+                            smsEnabled
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-slate-700'
+                          }`}
+                        >
+                          <span className={`w-2 h-2 rounded-full ${smsEnabled ? 'bg-white animate-pulse' : 'bg-gray-400'}`}></span>
+                          {smsEnabled ? 'SMS Gateway Active' : 'SMS Gateway Disabled'}
+                        </button>
+
+                        {httpSmsStatus === 'connected' ? (
+                          <span className="flex items-center gap-1.5 text-xs font-bold uppercase text-blue-600 dark:text-blue-400 bg-blue-100/60 dark:bg-blue-950/40 px-3 py-1.5 rounded-xl border border-blue-200/50 dark:border-blue-800/40">
+                            <span className="h-2 w-2 rounded-full bg-blue-500 animate-pulse"></span> Connected
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1.5 text-xs font-bold uppercase text-gray-400 bg-gray-100 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-slate-700">
+                            Disconnected
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="p-4 bg-blue-50/50 dark:bg-blue-950/20 rounded-2xl border border-blue-100/60 dark:border-blue-900/30 flex items-start justify-between gap-4">
+                      <div className="text-xs text-blue-900 dark:text-blue-200 space-y-1">
+                        <p className="font-bold flex items-center gap-1.5 text-blue-800 dark:text-blue-300">
+                          <span>📱</span> Seller SMS - নিজস্ব অ্যান্ড্রয়েড মোবাইল এসএমএস গেটওয়ে
+                        </p>
+                        <p className="text-blue-700/80 dark:text-blue-400/80 text-[11px] leading-relaxed">
+                          আপনার অ্যান্ড্রয়েড ফোনে <strong>Seller SMS Gateway App</strong> চালু করে শুধু কিউআর কোডটি স্ক্যান করুন। কোনো থার্ড-পার্টি সাবস্ক্রিপশন বা কনফিগারেশন ছাড়াই সরাসরি সিম দিয়ে আনলিমিটেড SMS যাবে।
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowHelpModal('httpsms')}
+                        className="text-xs text-blue-600 dark:text-blue-400 font-bold flex items-center gap-1.5 hover:underline cursor-pointer bg-white dark:bg-slate-900 px-3 py-1.5 rounded-xl border border-blue-200 dark:border-blue-800 shrink-0 shadow-sm"
+                      >
+                        <HelpCircle className="w-3.5 h-3.5 text-blue-500" /> সেটআপ নির্দেশিকা
+                      </button>
+                    </div>
+
+                    {/* QR Code Auto-Pairing Screen or Active Paired Phone Card */}
+                    {httpSmsStatus === 'connected' && pairedSmsDevice ? (
+                      <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-blue-200/80 dark:border-blue-900/50 shadow-sm space-y-6">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-gray-100 dark:border-slate-800">
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-950/50 border border-blue-100 dark:border-blue-900 flex items-center justify-center text-blue-600 text-xl font-bold">
+                              📱
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h4 className="text-sm font-black text-gray-900 dark:text-white">
+                                  {pairedSmsDevice.phoneModel || 'Android Phone'}
+                                </h4>
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                                  Live Connected
+                                </span>
+                              </div>
+                              <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+                                Android {pairedSmsDevice.androidVersion || '13+'} • ব্যাটারি: {pairedSmsDevice.battery || '100%'}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={handleTestHttpSmsConnection}
+                              disabled={isConnectingHttpSms}
+                              className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-sm transition-all"
+                            >
+                              <RefreshCw className={`w-3.5 h-3.5 ${isConnectingHttpSms ? 'animate-spin' : ''}`} />
+                              চেক স্ট্যাটাস
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleUnlinkSmsDevice}
+                              className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 font-bold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer border border-rose-200 dark:border-rose-900/40 shadow-sm transition-all"
+                            >
+                              <Unlink className="w-3.5 h-3.5" />
+                              আনলিঙ্ক / ডিসকানেক্ট
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* SIM Details Grid */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-gray-100 dark:border-slate-800 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-gray-700 dark:text-slate-300 flex items-center gap-1.5">
+                                📶 সিম ১ (SIM Slot 1)
+                              </span>
+                              {pairedSmsDevice.activeSim === 1 && (
+                                <span className="text-[10px] font-black uppercase text-blue-600 bg-blue-100 dark:bg-blue-950/60 px-2 py-0.5 rounded-md">
+                                  Default Sender
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm font-mono font-bold text-gray-900 dark:text-white">
+                              {pairedSmsDevice.sim1Number || 'Airtel / Grameenphone SIM'}
+                            </p>
+                            <p className="text-[11px] text-gray-400">
+                              অটোমেটিক কাস্টমার এসএমএস পাঠানোর জন্য সক্রিয়
+                            </p>
+                          </div>
+
+                          {pairedSmsDevice.sim2Number && (
+                            <div className="p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-gray-100 dark:border-slate-800 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-gray-700 dark:text-slate-300 flex items-center gap-1.5">
+                                  📶 সিম ২ (SIM Slot 2)
+                                </span>
+                                {pairedSmsDevice.activeSim === 2 && (
+                                  <span className="text-[10px] font-black uppercase text-blue-600 bg-blue-100 dark:bg-blue-950/60 px-2 py-0.5 rounded-md">
+                                    Default Sender
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-sm font-mono font-bold text-gray-900 dark:text-white">
+                                {pairedSmsDevice.sim2Number}
+                              </p>
+                              <p className="text-[11px] text-gray-400">
+                                সেকেন্ডারি সিম স্লট
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-gray-200/80 dark:border-slate-800 shadow-sm space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+                          {/* Left: Pairing QR Code Container */}
+                          <div className="md:col-span-5 flex flex-col items-center justify-center p-6 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-gray-100 dark:border-slate-800">
+                            <div className="p-3 bg-white rounded-2xl shadow-md border border-gray-100">
+                              {/* Static Stable Pairing QR Code */}
+                              <QRCode
+                                value={JSON.stringify({
+                                  app: 'SellerSMS',
+                                  serverUrl: typeof window !== 'undefined' ? window.location.origin : 'https://app.sellerscampus.com',
+                                  merchantId: shopId || 'default-tenant',
+                                  action: 'pair'
+                                })}
+                                size={180}
+                                level="M"
+                              />
+                            </div>
+                            <div className="mt-3 flex items-center gap-1.5 text-[11px] font-bold text-gray-500 dark:text-gray-400">
+                              <span className="w-2 h-2 rounded-full bg-blue-500 animate-ping"></span>
+                              স্ক্যানের জন্য প্রস্তুত (Static QR)
+                            </div>
+                          </div>
+
+                          {/* Right: Step-by-Step Scan Instructions */}
+                          <div className="md:col-span-7 space-y-4">
+                            <div>
+                              <span className="text-[10px] font-black uppercase text-blue-600 dark:text-blue-400 tracking-wider">
+                                1-Click Fast Auto-Pairing
+                              </span>
+                              <h4 className="text-sm font-black text-gray-900 dark:text-white mt-0.5">
+                                Seller SMS অ্যাপ দিয়ে কিউআর কোড স্ক্যান করুন
+                              </h4>
+                            </div>
+
+                            <ol className="space-y-2.5 text-xs text-gray-600 dark:text-slate-300 font-medium">
+                              <li className="flex items-start gap-2.5">
+                                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-[10px]">
+                                  ১
+                                </span>
+                                <span>আপনার অ্যান্ড্রয়েড ফোনে <strong>Seller SMS Gateway</strong> অ্যাপটি চালু করুন।</span>
+                              </li>
+                              <li className="flex items-start gap-2.5">
+                                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-[10px]">
+                                  ২
+                                </span>
+                                <span>অ্যাপের <strong>"Scan QR to Pair"</strong> বাটনে ট্যাপ করে এই কিউআর কোডটি স্ক্যান করুন।</span>
+                              </li>
+                              <li className="flex items-start gap-2.5">
+                                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-[10px]">
+                                  ৩
+                                </span>
+                                <span>মুহূর্তের মধ্যে ফোনটি সংযুক্ত হয়ে যাবে এবং কাস্টমারদের আনলিমিটেড এসএমএস পাঠানো শুরু করবে।</span>
+                              </li>
+                            </ol>
+
+                            <div className="pt-2 flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={handleTestHttpSmsConnection}
+                                disabled={isConnectingHttpSms}
+                                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center gap-2 cursor-pointer shadow-sm transition-all"
+                              >
+                                <RefreshCw className={`w-3.5 h-3.5 ${isConnectingHttpSms ? 'animate-spin' : ''}`} />
+                                রিফ্রেশ / পেয়ার স্ট্যাটাস চেক
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Test SMS Section */}
+                    <div className="bg-blue-50/40 dark:bg-blue-950/20 p-4 rounded-2xl border border-blue-100/50 dark:border-blue-950/45 space-y-3">
+                      <div>
+                        <h6 className="text-[11px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <span className="flex h-2 w-2 rounded-full bg-blue-500 animate-pulse"></span>
+                          মোবাইল এসএমএস টেস্ট (Send Test SMS)
+                        </h6>
+                        <p className="text-[10px] text-gray-400 font-medium">আপনার ফোন থেকে কাস্টমারের নম্বরে সরাসরি এসএমএস পাঠানো পরীক্ষা করুন</p>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={httpSmsTestPhone}
+                            onChange={(e) => setHttpSmsTestPhone(e.target.value)}
+                            placeholder="মোবাইল নম্বর লিখুন (যেমন: 017XXXXXXXX বা +88017XXXXXXXX)"
+                            className="w-full px-3.5 py-2 bg-white dark:bg-slate-900 border border-blue-100 dark:border-slate-800 rounded-xl text-xs font-mono font-bold focus:ring-2 focus:ring-blue-500 outline-none text-slate-800 dark:text-slate-200 transition-all shadow-inner"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleSendHttpSmsTestMessage}
+                            disabled={httpSmsTestSending || !httpSmsTestPhone}
+                            className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-sm transition-all whitespace-nowrap cursor-pointer disabled:opacity-50"
+                          >
+                            {httpSmsTestSending ? 'পাঠানো হচ্ছে...' : 'টেস্ট এসএমএস পাঠান'}
+                          </button>
+                        </div>
+
+                        {httpSmsTestStatus && (
+                          <p className="text-xs text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 p-2.5 rounded-xl font-bold">
+                            {httpSmsTestStatus}
+                          </p>
+                        )}
+
+                        {httpSmsTestError && (
+                          <p className="text-xs text-rose-500 bg-rose-50 dark:bg-rose-950/20 border border-rose-100 p-2.5 rounded-xl font-bold">
+                            {httpSmsTestError}
                           </p>
                         )}
                       </div>
@@ -1665,7 +2177,11 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
             <div className="p-4 border-b border-gray-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950">
               <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
                 <HelpCircle className="w-5 h-5 text-indigo-500" />
-                {showHelpModal === 'baileys' ? 'Our Own Gateway — ব্যবহার নির্দেশিকা' : 'Official WhatsApp API — কনফিগার নির্দেশিকা'}
+                {showHelpModal === 'baileys' 
+                  ? 'Our Own Gateway — ব্যবহার নির্দেশিকা' 
+                  : showHelpModal === 'meta' 
+                  ? 'Official WhatsApp API — কনফিগার নির্দেশিকা'
+                  : 'Android SMS Gateway (httpSMS) — ব্যবহার ও সেটআপ নির্দেশিকা'}
               </h3>
               <button onClick={() => setShowHelpModal(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
                 <X className="w-5 h-5" />
@@ -1673,7 +2189,7 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
             </div>
 
             <div className="p-6 overflow-y-auto space-y-4 text-xs leading-relaxed text-gray-700 dark:text-slate-300">
-              {showHelpModal === 'baileys' ? (
+              {showHelpModal === 'baileys' && (
                 <>
                   <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 rounded-xl border border-emerald-200/50">
                     <p className="font-bold text-emerald-800 dark:text-emerald-300 text-sm mb-1">
@@ -1699,7 +2215,9 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
                     <strong>💡 সুবিধা:</strong> এটি সরাসরি ব্যাকএন্ড সার্ভারে সকেট চালু রাখে, তাই POS সেল বা বকেয়া রিমাইন্ডার মেসেজ স্বয়ংক্রিয়ভাবে সেন্ড হবে।
                   </div>
                 </>
-              ) : (
+              )}
+
+              {showHelpModal === 'meta' && (
                 <>
                   <div className="p-3 bg-indigo-50 dark:bg-indigo-950/30 rounded-xl border border-indigo-200/50">
                     <p className="font-bold text-indigo-800 dark:text-indigo-300 text-sm mb-1">
@@ -1719,6 +2237,33 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
                       <li><strong>System User Access Token নিন</strong>: Business Settings &gt; System Users থেকে <em>Permanent Access Token</em> তৈরি করে এখানে দিন।</li>
                       <li><strong>সংরক্ষণ করুন</strong>: সেটিংস সংরক্ষণ বাটনে ক্লিক করলে তাৎক্ষণিক গেটওয়ে সক্রিয় হয়ে যাবে।</li>
                     </ol>
+                  </div>
+                </>
+              )}
+
+              {showHelpModal === 'httpsms' && (
+                <>
+                  <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-xl border border-blue-200/50">
+                    <p className="font-bold text-blue-800 dark:text-blue-300 text-sm mb-1">
+                      📱 Seller SMS Gateway (ইন-হাউস কিউআর পেয়ারিং)
+                    </p>
+                    <p className="text-blue-700 dark:text-blue-400">
+                      আপনার নিজস্ব অ্যান্ড্রয়েড ফোনের সিম কার্ড ও এসএমএস প্যাক ব্যবহার করে সম্পূর্ণ বিনামূল্যে সরাসরি কাস্টমারদের মোবাইলে এসএমএস পাঠান।
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <h4 className="font-bold text-sm text-gray-900 dark:text-white">সহজ ৩ ধাপে সেটআপ:</h4>
+                    <ol className="list-decimal pl-4 space-y-2 font-medium">
+                      <li><strong>Seller SMS অ্যাপ চালু করুন</strong>: আপনার ফোনে Seller SMS Gateway ক্লায়েন্ট অ্যাপটি ওপেন করুন।</li>
+                      <li><strong>কিউআর কোড স্ক্যান</strong>: অ্যাপের "Scan QR to Pair" বাটনে ট্যাপ করে ড্যাশবোর্ডের কিউআর কোডটি স্ক্যান করুন।</li>
+                      <li><strong>স্বয়ংক্রিয় পেয়ারিং</strong>: কোনো API Key বা ম্যানুয়াল সেটিংস ছাড়াই ফোনটি তৎক্ষণাৎ ড্যাশবোর্ডের সাথে সংযুক্ত হয়ে যাবে।</li>
+                      <li><strong>টেস্ট এসএমএস পাঠান</strong>: নিচের 'মোবাইল এসএমএস টেস্ট' বক্সে নম্বর দিয়ে সরাসরি টেস্ট এসএমএস পাঠিয়ে যাচাই করুন।</li>
+                    </ol>
+                  </div>
+
+                  <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 rounded-xl border border-emerald-200/50 text-emerald-800 dark:text-emerald-300">
+                    <strong>💡 সুবিধা:</strong> আপনার ফোনে যেকোনো লোকাল মোবাইল অপারেটরের (যেমন: GP, Robi, Banglalink, Teletalk) আনলিমিটেড বা বান্ডেল এসএমএস থাকলে প্রতি কাস্টমারকে স্বয়ংক্রিয় ইনভয়েস ও বকেয়া রিমাইন্ডার পৌঁছে যাবে।
                   </div>
                 </>
               )}

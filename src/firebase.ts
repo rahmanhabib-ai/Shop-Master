@@ -35,14 +35,34 @@ try {
   console.warn('[Quota Intercept] Failed to silence Firestore logger:', e);
 }
 
-// Global quota tracker
-export let isQuotaExceeded = typeof window !== 'undefined' ? localStorage.getItem('firestore_quota_exceeded') === 'true' : false;
+// Global quota tracker with daily auto-reset
+const getInitialQuotaState = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  try {
+    const raw = localStorage.getItem('firestore_quota_exceeded');
+    if (!raw) return false;
+    const quotaDate = localStorage.getItem('firestore_quota_date');
+    const today = new Date().toISOString().slice(0, 10);
+    // If quota was recorded on a previous day, auto-clear it so app reconnects to fresh quota
+    if (quotaDate && quotaDate !== today) {
+      localStorage.removeItem('firestore_quota_exceeded');
+      localStorage.removeItem('firestore_quota_date');
+      return false;
+    }
+    return raw === 'true';
+  } catch (e) {
+    return false;
+  }
+};
+
+export let isQuotaExceeded = getInitialQuotaState();
 
 export const resetQuotaExceeded = async () => {
   isQuotaExceeded = false;
   if (typeof window !== 'undefined') {
     try {
       localStorage.removeItem('firestore_quota_exceeded');
+      localStorage.removeItem('firestore_quota_date');
       if (db) {
         await enableNetwork(db).catch(() => {});
       }
@@ -76,7 +96,9 @@ const markQuotaExceeded = () => {
     isQuotaExceeded = true;
     if (typeof window !== 'undefined') {
       try {
+        const today = new Date().toISOString().slice(0, 10);
         localStorage.setItem('firestore_quota_exceeded', 'true');
+        localStorage.setItem('firestore_quota_date', today);
         window.dispatchEvent(new CustomEvent('firestore-quota-exceeded'));
         if (db) {
           disableNetwork(db).catch(() => {});

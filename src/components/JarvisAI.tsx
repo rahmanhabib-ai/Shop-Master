@@ -2014,7 +2014,7 @@ export const JarvisAI: React.FC<JarvisAIProps> = ({ onClose, shopId, systemData,
             })),
             { role: 'user', parts: [{ text: command }] }
           ],
-          config: { model: "gemini-3.8-flash" },
+          config: { model: "gemini-3.1-flash-lite" },
           apiProvider: aiSettings?.apiProvider || 'gemini',
           customApiKey: aiSettings?.geminiApiKey || undefined,
           openrouterApiKey: aiSettings?.openrouterApiKey || undefined,
