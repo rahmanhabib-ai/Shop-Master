@@ -1024,8 +1024,8 @@ async function startServer() {
   // SELLER SMS (IN-HOUSE ANDROID SIM GATEWAY) ENDPOINTS
   // ==========================================
 
-  // Handshake & Pairing Endpoint for Android App when QR is scanned
-  app.post('/api/sms/pair-device', (req: express.Request, res: express.Response) => {
+  // Handshake & Pairing Handler for Android App when QR is scanned
+  const handleSmsPair = (req: express.Request, res: express.Response) => {
     try {
       const { 
         merchantId, 
@@ -1047,20 +1047,20 @@ async function startServer() {
         deviceId: `sms_${merchantId}`,
         token: token || `token_${merchantId}`,
         status: 'connected',
-        sim1Number: sim1Number || '01600000000', // Airtel/Operator default if missing
-        sim1Carrier: sim1Carrier || 'Airtel Bangladesh',
-        sim2Number: sim2Number || '01800000000', // Robi/Operator default if missing
-        sim2Carrier: sim2Carrier || 'Robi Axiata',
+        sim1Number: sim1Number || '',
+        sim1Carrier: sim1Carrier || 'SIM 1',
+        sim2Number: sim2Number || '',
+        sim2Carrier: sim2Carrier || 'SIM 2',
         activeSim: activeSim !== undefined ? Number(activeSim) : 1,
         phoneModel: phoneModel || 'Android Phone',
-        batteryLevel: batteryLevel !== undefined ? Number(batteryLevel) : 95,
+        batteryLevel: batteryLevel !== undefined ? Number(batteryLevel) : 100,
         lastPing: Date.now()
       };
 
       smsPairedDevices.set(merchantId, deviceData);
       saveSmsPairedDevices(smsPairedDevices);
 
-      console.log(`[Seller SMS Gateway] Android Device successfully paired for merchant ${merchantId}: SIM1 (${deviceData.sim1Carrier}): ${deviceData.sim1Number}, SIM2 (${deviceData.sim2Carrier}): ${deviceData.sim2Number}`);
+      console.log(`[Seller SMS Gateway] Android Device successfully paired for merchant ${merchantId}: Model: ${deviceData.phoneModel}, SIM1: ${deviceData.sim1Number || 'N/A'}, SIM2: ${deviceData.sim2Number || 'N/A'}`);
 
       return res.json({
         success: true,
@@ -1072,7 +1072,11 @@ async function startServer() {
       console.error('[Seller SMS Pairing Error]:', err);
       return res.status(500).json({ success: false, error: err.message || 'Pairing failed' });
     }
-  });
+  };
+
+  // Support both /api/sms/pair-device and /api/sms/pair
+  app.post('/api/sms/pair-device', handleSmsPair);
+  app.post('/api/sms/pair', handleSmsPair);
 
   // Query SMS Paired Device Status
   app.get('/api/sms/paired-status', (req: express.Request, res: express.Response) => {
@@ -1175,7 +1179,7 @@ async function startServer() {
         to: cleanTo,
         content: content || '🧪 টেস্ট এসএমএস: আপনার নিজস্ব অ্যান্ড্রয়েড সিম গেটওয়ে সফলভাবে সংযুক্ত হয়েছে এবং কাজ করছে!',
         sim: simSlot,
-        status: 'sent',
+        status: 'pending', // Pending so paired Android device polls and delivers it via hardware SIM
         createdAt: Date.now()
       });
 
@@ -1905,7 +1909,7 @@ async function startServer() {
             to: cleanPhone,
             content: textMessage,
             sim: simSlot,
-            status: 'sent', // Marks processed for instant live feedback
+            status: 'pending', // Pending so Android gateway app polls and sends via hardware SIM
             createdAt: Date.now()
           });
 

@@ -1,13 +1,16 @@
-const { execSync } = require('child_process');
-const path = require('path');
-const fs = require('fs');
+import { execSync } from 'child_process';
+import path from 'path';
+import fs from 'fs';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
 
 try {
   // Try loading @tailwindcss/oxide
   require('@tailwindcss/oxide');
   console.log('[@tailwindcss/oxide] Native binding is loaded and working correctly.');
 } catch (error) {
-  console.warn('[@tailwindcss/oxide] Native binding failed to load:', error.message);
+  console.warn('[@tailwindcss/oxide] Native binding failed to load:', (error && error.message) || String(error));
   console.log('[@tailwindcss/oxide] Attempting to install native binding...');
 
   const platform = process.platform;

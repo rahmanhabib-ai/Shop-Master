@@ -1,7 +1,13 @@
-// Hostinger Entrypoint v1.0.5 - CommonJS Engine for Phusion Passenger (Auto-Build & Fail-Safe Server)
-const fs = require('fs');
-const path = require('path');
-const { execSync } = require('child_process');
+// Hostinger Entrypoint v1.0.5 - Node Engine for Phusion Passenger & Deployments (Auto-Build & Fail-Safe Server)
+import fs from 'fs';
+import path from 'path';
+import { execSync } from 'child_process';
+import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 function logCrash(error) {
   const message = `[${new Date().toISOString()}] CRASH ERROR: ${error?.stack || error || 'Unknown Error'}\n`;

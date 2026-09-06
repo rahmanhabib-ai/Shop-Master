@@ -3,6 +3,7 @@
   "description": "ShopMaster - WhatsApp POS Sync Super Shop Management System",
   "author": "RAHMAN HABIB <stratproamz@gmail.com>",
   "private": true,
+  "type": "module",
   "version": "1.0.5",
   "main": "server.js",
   "engines": {

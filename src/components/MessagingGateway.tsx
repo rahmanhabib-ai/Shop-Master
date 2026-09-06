@@ -1785,11 +1785,11 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
                           {/* Left: Pairing QR Code Container */}
                           <div className="md:col-span-5 flex flex-col items-center justify-center p-6 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-gray-100 dark:border-slate-800">
                             <div className="p-3 bg-white rounded-2xl shadow-md border border-gray-100">
-                              {/* Static Stable Pairing QR Code */}
+                              {/* Dynamic Stable Pairing QR Code */}
                               <QRCode
                                 value={JSON.stringify({
                                   app: 'SellerSMS',
-                                  serverUrl: typeof window !== 'undefined' ? window.location.origin : 'https://app.sellerscampus.com',
+                                  serverUrl: typeof window !== 'undefined' ? window.location.origin : '',
                                   merchantId: shopId || 'default-tenant',
                                   action: 'pair'
                                 })}
