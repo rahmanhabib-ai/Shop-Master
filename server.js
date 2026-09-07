@@ -44,6 +44,13 @@ if (isElectron) {
       require(distServerPath);
       console.log("[Production Entrypoint] Successfully loaded dist/server.cjs.");
       serverLoaded = true;
+      try {
+        const tmpDir = path.join(__dirname, 'tmp');
+        if (!fs.existsSync(tmpDir)) {
+          fs.mkdirSync(tmpDir, { recursive: true });
+        }
+        fs.writeFileSync(path.join(tmpDir, 'restart.txt'), String(Date.now()));
+      } catch (e) {}
     } catch (err) {
       console.error("[Production Entrypoint] Error requiring dist/server.cjs:", err);
       logCrash(err);

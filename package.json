@@ -13,7 +13,7 @@
     "postinstall": "node scripts/fix-oxide.js && node scripts/fix-baileys.js",
     "prebuild": "node scripts/fix-oxide.js && node scripts/fix-baileys.js",
     "dev": "tsx server.ts",
-    "build": "node scripts/fix-oxide.js && node scripts/fix-baileys.js && vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist",

@@ -3790,7 +3790,12 @@ async function startServer() {
   } else {
     (app as any).listen(targetPort, onServerReady);
   }
+
+  return app;
 }
+
+export default startServer;
+export { startServer };
 
 startServer().catch((err) => {
   console.error('[Server Error] Unhandled error starting server:', err);
