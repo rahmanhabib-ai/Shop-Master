@@ -72,6 +72,20 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
 
   const shopId = settings.id || 'merchant';
 
+  // Stable Dynamic QR Payload for Seller SMS In-House Android App (Works on any domain & environment)
+  const smsQrPayload = React.useMemo(() => {
+    let origin = typeof window !== 'undefined' ? window.location.origin : '';
+    if (origin.includes('ais-dev-')) {
+      origin = origin.replace('ais-dev-', 'ais-pre-');
+    }
+    return JSON.stringify({
+      app: 'SellerSMS',
+      serverUrl: origin,
+      merchantId: shopId || 'merchant',
+      action: 'pair'
+    });
+  }, [shopId]);
+
   // WhatsApp Configuration State
   const [waType, setWaType] = useState<string>(settings.waGatewayType || 'baileys');
   const [waToken, setWaToken] = useState<string>(settings.waToken || '');
@@ -180,9 +194,50 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
     prevStatusRef.current = whatsappStatus;
   }, [whatsappStatus]);
 
+  // Dedicated SMS Status Checker (Independent of WhatsApp)
+  const fetchSmsStatus = React.useCallback(async (forcedShopId?: string) => {
+    const shopIdToCheck = forcedShopId || settings.id || 'merchant';
+    try {
+      const smsRes = await fetch(`/api/sms/paired-status?merchantId=${shopIdToCheck}`);
+      const smsData = await smsRes.json();
+      if (smsData.success && smsData.status === 'connected' && smsData.device) {
+        setHttpSmsStatus('connected');
+        setPairedSmsDevice(smsData.device);
+        if (settings.httpsms_status !== 'connected' || settings.sms_status !== 'active') {
+          onSaveSettings({
+            ...settings,
+            httpsms_status: 'connected',
+            sms_status: 'active'
+          });
+        }
+      } else {
+        setHttpSmsStatus('disconnected');
+        setPairedSmsDevice(null);
+      }
+    } catch (e) {
+      console.warn("SMS Paired status sync warning:", e);
+    }
+  }, [settings, onSaveSettings]);
+
+  // Fast Auto-Sync for Seller SMS Gateway:
+  // When disconnected/pairing, polls every 2.5s. When connected, checks every 10s for battery/ping telemetry.
+  React.useEffect(() => {
+    fetchSmsStatus();
+
+    const smsInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      fetchSmsStatus();
+    }, httpSmsStatus === 'connected' ? 10000 : 2500);
+
+    return () => clearInterval(smsInterval);
+  }, [fetchSmsStatus, httpSmsStatus]);
+
   const fetchCurrentConnectionStatus = React.useCallback(async (forcedShopId?: string, forcedDeviceId?: string) => {
     const shopIdToCheck = forcedShopId || settings.id || 'merchant';
     
+    // Always check SMS status in parallel
+    fetchSmsStatus(shopIdToCheck);
+
     // Check Baileys Multi-Device Status (Primary)
     if (waType === 'baileys') {
       try {
@@ -220,28 +275,6 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
         setWhatsappStatus('disconnected');
       }
       return;
-    }
-
-    // Check Paired Android SMS Gateway Status
-    try {
-      const smsRes = await fetch(`/api/sms/paired-status?merchantId=${shopIdToCheck}`);
-      const smsData = await smsRes.json();
-      if (smsData.success && smsData.status === 'connected' && smsData.device) {
-        setHttpSmsStatus('connected');
-        setPairedSmsDevice(smsData.device);
-        if (settings.httpsms_status !== 'connected') {
-          onSaveSettings({
-            ...settings,
-            httpsms_status: 'connected',
-            sms_status: 'active'
-          });
-        }
-      } else {
-        setHttpSmsStatus('disconnected');
-        setPairedSmsDevice(null);
-      }
-    } catch (e) {
-      console.warn("SMS Paired status sync warning:", e);
     }
 
     if (waType !== 'zender' && waType !== 'walink') return;
@@ -284,7 +317,7 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
       console.warn("Status Sync Temporary Warning (retrying):", e);
       // Do not demote status or mutate settings during temporary fetch failures (e.g., server restarts)
     }
-  }, [waType, metaPhoneNumberId, metaAccessToken, settings, zenderWaDeviceId, zenderDeviceId, showQrModal, onSaveSettings]);
+  }, [waType, metaPhoneNumberId, metaAccessToken, settings, zenderWaDeviceId, zenderDeviceId, showQrModal, onSaveSettings, fetchSmsStatus]);
 
   React.useEffect(() => {
     fetchCurrentConnectionStatus();
@@ -851,18 +884,20 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
 
   const handleUnlinkSmsDevice = async () => {
     try {
-      await fetch('/api/sms/unlink-device', {
+      await fetch('/api/sms/unlink', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ merchantId: shopId })
       });
       setHttpSmsStatus('disconnected');
       setPairedSmsDevice(null);
+      setHttpSmsTestStatus(null);
+      setHttpSmsTestError(null);
       onSaveSettings({
         ...settings,
-        httpsms_status: 'disconnected'
+        httpsms_status: 'disconnected',
+        sms_status: 'none'
       });
-      setHttpSmsTestStatus(null);
     } catch (e: any) {
       console.error('Error unlinking SMS device:', e);
     }
@@ -1710,7 +1745,7 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
                                 </span>
                               </div>
                               <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
-                                Android {pairedSmsDevice.androidVersion || '13+'} • ব্যাটারি: {pairedSmsDevice.battery || '100%'}
+                                Android {pairedSmsDevice.androidVersion || '13+'} • ব্যাটারি: {pairedSmsDevice.batteryLevel !== undefined ? `${pairedSmsDevice.batteryLevel}%` : (pairedSmsDevice.battery || '100%')}
                               </p>
                             </div>
                           </div>
@@ -1787,19 +1822,19 @@ export const MessagingGateway: React.FC<MessagingGatewayProps> = ({
                             <div className="p-3 bg-white rounded-2xl shadow-md border border-gray-100">
                               {/* Dynamic Stable Pairing QR Code */}
                               <QRCode
-                                value={JSON.stringify({
-                                  app: 'SellerSMS',
-                                  serverUrl: typeof window !== 'undefined' ? window.location.origin : '',
-                                  merchantId: shopId || 'default-tenant',
-                                  action: 'pair'
-                                })}
+                                value={smsQrPayload}
                                 size={180}
                                 level="M"
                               />
                             </div>
                             <div className="mt-3 flex items-center gap-1.5 text-[11px] font-bold text-gray-500 dark:text-gray-400">
                               <span className="w-2 h-2 rounded-full bg-blue-500 animate-ping"></span>
-                              স্ক্যানের জন্য প্রস্তুত (Static QR)
+                              স্ক্যানের জন্য প্রস্তুত (Live Pairing QR)
+                            </div>
+                            <div className="mt-2 text-center">
+                              <span className="text-[10px] font-mono text-gray-400 dark:text-slate-500 block truncate max-w-[200px]" title={JSON.parse(smsQrPayload).serverUrl}>
+                                {JSON.parse(smsQrPayload).serverUrl || 'Auto-Detect Domain'}
+                              </span>
                             </div>
                           </div>
 

@@ -11,8 +11,9 @@
   },
   "scripts": {
     "postinstall": "node scripts/fix-oxide.js && node scripts/fix-baileys.js",
+    "prebuild": "node scripts/fix-oxide.js && node scripts/fix-baileys.js",
     "dev": "tsx server.ts",
-    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "build": "node scripts/fix-oxide.js && node scripts/fix-baileys.js && vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist",
@@ -69,6 +70,10 @@
     "electron-builder": "^26.15.3",
     "eslint-plugin-react-hooks": "^7.1.1",
     "tsx": "^4.21.0"
+  },
+  "optionalDependencies": {
+    "@tailwindcss/oxide-linux-x64-gnu": "^4.1.14",
+    "@tailwindcss/oxide-linux-x64-musl": "^4.1.14"
   },
   "supportedArchitectures": {
     "os": [
