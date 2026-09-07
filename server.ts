@@ -3792,6 +3792,8 @@ async function startServer() {
     } else {
       (app as any).listen(rawPort, onServerReady);
     }
+  } else if (process.env.PASSENGER_APP_ENV || process.env.PASSENGER_BASE_URI) {
+    (app as any).listen('passenger', onServerReady);
   } else {
     app.listen(3000, '0.0.0.0', onServerReady);
   }

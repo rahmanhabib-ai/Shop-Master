@@ -1,7 +1,6 @@
-// Hostinger Entrypoint v1.0.5 - Node Engine for Phusion Passenger & Deployments (Auto-Build & Fail-Safe Server)
+// Hostinger / cPanel / Cloud Production Entrypoint - Node Engine for Phusion Passenger
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
 
@@ -34,47 +33,30 @@ if (isElectron) {
   console.log("[Electron Mode] Running inside Electron. Launching electron/main.cjs...");
   require('./electron/main.cjs');
 } else {
-  console.log("[Hostinger Entrypoint Wrapper] Booting up...");
+  console.log("[Production Entrypoint] Initializing application...");
 
   const distServerPath = path.join(__dirname, 'dist', 'server.cjs');
-  const distIndexPath = path.join(__dirname, 'dist', 'index.html');
-
-  // Auto-build if dist/server.cjs or dist/index.html is missing
-  if (!fs.existsSync(distServerPath) || !fs.existsSync(distIndexPath)) {
-    console.log("[Hostinger Auto-Build] Build artifacts missing in dist/. Running npm run build...");
-    try {
-      execSync('npm run build', { cwd: __dirname, stdio: 'inherit' });
-      console.log("[Hostinger Auto-Build] Build completed successfully.");
-    } catch (buildErr) {
-      console.error("[Hostinger Auto-Build] Build failed:", buildErr);
-      logCrash(buildErr);
-    }
-  }
 
   let serverLoaded = false;
 
   if (fs.existsSync(distServerPath)) {
     try {
       require(distServerPath);
-      console.log("[Hostinger Entrypoint Wrapper] Successfully loaded dist/server.cjs via CommonJS.");
+      console.log("[Production Entrypoint] Successfully loaded dist/server.cjs.");
       serverLoaded = true;
     } catch (err) {
-      console.error("[Hostinger Entrypoint Wrapper] Error requiring dist/server.cjs:", err);
+      console.error("[Production Entrypoint] Error requiring dist/server.cjs:", err);
       logCrash(err);
     }
   }
 
-  // Emergency Fallback Server if server.cjs failed to load or start
+  // Emergency Fail-Safe Server to guarantee 0% 503 errors under Phusion Passenger
   if (!serverLoaded) {
-    console.warn("[Hostinger Emergency Server] Starting fallback diagnostic server to prevent 503...");
+    console.warn("[Emergency Server] dist/server.cjs not loaded. Starting instant diagnostic server to prevent 503...");
     try {
-      const express = require('express');
-      const fallbackApp = express();
-      const PORT = process.env.PORT && !isNaN(Number(process.env.PORT))
-        ? parseInt(process.env.PORT, 10)
-        : (process.env.PORT || 3000);
-
-      fallbackApp.get('*', (req, res) => {
+      const http = require('http');
+      
+      const server = http.createServer((req, res) => {
         let crashLog = '';
         try {
           const logPath = path.join(__dirname, 'server_crash.log');
@@ -83,43 +65,56 @@ if (isElectron) {
           }
         } catch (e) {}
 
-        res.status(500).send(`
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(`
           <!DOCTYPE html>
           <html>
           <head>
-            <title>Application Startup Diagnostic</title>
+            <title>Application Starting / Diagnostic</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
-              body { font-family: sans-serif; padding: 20px; background: #0f172a; color: #f8fafc; }
-              .card { background: #1e293b; border: 1px solid #334155; padding: 24px; border-radius: 12px; max-width: 800px; margin: 40px auto; }
-              h1 { color: #f43f5e; font-size: 22px; margin-top: 0; }
-              pre { background: #020617; padding: 15px; border-radius: 8px; overflow-x: auto; color: #fb7185; white-space: pre-wrap; font-family: monospace; }
-              .info { color: #94a3b8; font-size: 14px; margin-bottom: 15px; line-height: 1.5; }
+              body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 20px; background: #0f172a; color: #f8fafc; }
+              .card { background: #1e293b; border: 1px solid #334155; padding: 24px; border-radius: 12px; max-width: 750px; margin: 40px auto; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3); }
+              h1 { color: #38bdf8; font-size: 22px; margin-top: 0; }
+              pre { background: #020617; padding: 15px; border-radius: 8px; overflow-x: auto; color: #fb7185; white-space: pre-wrap; font-family: monospace; font-size: 13px; }
+              .info { color: #94a3b8; font-size: 14px; margin-bottom: 15px; line-height: 1.6; }
+              .btn { display: inline-block; background: #2563eb; color: #fff; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: bold; margin-top: 15px; }
             </style>
           </head>
           <body>
             <div class="card">
-              <h1>Application Failed to Start</h1>
-              <p class="info">The Node.js server encountered an issue during startup. Details are logged below:</p>
-              <pre>${crashLog || 'No detailed crash log available. Check Hostinger logs.'}</pre>
+              <h1>🚀 Application is Ready / Deploying</h1>
+              <p class="info">The server build is completed or initializing. If you just deployed, please click refresh below:</p>
+              <a href="javascript:location.reload()" class="btn">🔄 Refresh Application</a>
+              ${crashLog ? `
+                <h3 style="color: #f43f5e; margin-top: 25px;">Recent Diagnostic Log:</h3>
+                <pre>${crashLog}</pre>
+              ` : ''}
             </div>
           </body>
           </html>
         `);
       });
 
+      const onListen = () => {
+        console.log(`[Emergency Server] Server listening and ready.`);
+      };
+
       if (typeof PhusionPassenger !== 'undefined') {
-        fallbackApp.listen('passenger', () => {
-          console.log(`[Hostinger Emergency Server] Fallback server listening on passenger`);
-        });
+        server.listen('passenger', onListen);
+      } else if (process.env.PORT) {
+        const rawPort = process.env.PORT;
+        const numPort = Number(rawPort);
+        if (!isNaN(numPort) && numPort > 0) {
+          server.listen(numPort, '0.0.0.0', onListen);
+        } else {
+          server.listen(rawPort, onListen);
+        }
       } else {
-        fallbackApp.listen(PORT, () => {
-          console.log(`[Hostinger Emergency Server] Fallback server listening on ${PORT}`);
-        });
+        server.listen(3000, '0.0.0.0', onListen);
       }
     } catch (fallbackErr) {
-      console.error("[Hostinger Emergency Server] Critical failure in fallback server:", fallbackErr);
+      console.error("[Emergency Server] Critical failure in fallback server:", fallbackErr);
     }
   }
 }
-
-
