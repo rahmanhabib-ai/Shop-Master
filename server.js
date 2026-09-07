@@ -107,9 +107,15 @@ if (isElectron) {
         `);
       });
 
-      fallbackApp.listen(PORT, () => {
-        console.log(`[Hostinger Emergency Server] Fallback server listening on ${PORT}`);
-      });
+      if (typeof PhusionPassenger !== 'undefined') {
+        fallbackApp.listen('passenger', () => {
+          console.log(`[Hostinger Emergency Server] Fallback server listening on passenger`);
+        });
+      } else {
+        fallbackApp.listen(PORT, () => {
+          console.log(`[Hostinger Emergency Server] Fallback server listening on ${PORT}`);
+        });
+      }
     } catch (fallbackErr) {
       console.error("[Hostinger Emergency Server] Critical failure in fallback server:", fallbackErr);
     }

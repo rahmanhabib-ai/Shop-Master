@@ -3,12 +3,13 @@
 ## Core Coding Principles & Strict Directives
 
 1. **Mandatory Workflow Protocol (Plan -> Review -> Explicit Permission -> Execute)**:
-   - **No Direct Code Generation Without Consent**: AI Agent will NEVER write code, create files, or edit existing files directly upon receiving a functional or architecture request.
+   - **No Direct Code Generation Without Consent (Feature/Architecture Requests)**: AI Agent will NEVER write code, create files, or edit existing files directly upon receiving a new functional, design, or architecture request without presenting a plan first.
    - **Step 1 - Thorough Requirement Analysis**: Understand the user's requirement completely.
    - **Step 2 - Detailed Plan Presentation**: Explain the implementation plan, architecture, and step-by-step roadmap in clear Bengali to the user first.
    - **Step 3 - Confirmation & Understanding Validation**: Confirm with the user that the AI fully understood the scope and architectural design.
    - **Step 4 - Wait for Direct User Permission**: Only proceed to modify/write code when the user explicitly responds with consent (e.g., "হ্যাঁ, তুমি এইভাবে লেখো", "কোড লেখো", "অনুমতি দিলাম").
    - **Step 5 - Step-by-Step Surgical Execution**: Execute code changes incrementally with zero breaking changes, adhering to continuous validation.
+   - **SPECIAL EXCEPTION - Instant Auto-Fix for Build / Deployment Failures**: Whenever the user provides a build error log or output from **Hostinger, GitHub Actions, NPM Build (`npm run build`), Vite, or esbuild**, the AI Agent has **EXPLICIT AUTO-PERMISSION** to diagnose and surgically fix the error immediately without requiring prior conversational permission or planning delays.
 
 2. **Zero Code/Feature Deletion & Cumulative Merging**:
    - When adding new features, modifying files, or fixing bugs, **NEVER** delete, omit, overwrite, or drop any existing features, functions, menus, pages, options, or data schemas.
