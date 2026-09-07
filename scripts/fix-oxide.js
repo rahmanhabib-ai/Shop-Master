@@ -94,56 +94,13 @@ try {
     console.log('[@tailwindcss/oxide] Native binding is loaded and working correctly.');
   }
 } catch (error) {
-  console.warn('[@tailwindcss/oxide] Native binding failed to load:', (error && error.message) || String(error));
+  console.warn('[@tailwindcss/oxide] Native binding unavailable:', (error && error.message) || String(error));
 }
 
 if (!isWorking) {
-  console.log('[@tailwindcss/oxide] Attempting to install native binding...');
-
-  const platform = process.platform;
-  const arch = process.arch;
-  let targetPkg = '';
-
-  if (platform === 'linux' && arch === 'x64') {
-    let isMusl = false;
-    try {
-      if (fs.existsSync('/lib/ld-musl-x86_64.so.1') || fs.existsSync('/lib/ld-musl-x86_64.so')) {
-        isMusl = true;
-      }
-    } catch (e) {}
-    targetPkg = isMusl ? '@tailwindcss/oxide-linux-x64-musl' : '@tailwindcss/oxide-linux-x64-gnu';
-  } else if (platform === 'linux' && arch === 'arm64') {
-    targetPkg = '@tailwindcss/oxide-linux-arm64-gnu';
-  } else if (platform === 'win32' && arch === 'x64') {
-    targetPkg = '@tailwindcss/oxide-win32-x64-msvc';
-  } else if (platform === 'darwin' && arch === 'x64') {
-    targetPkg = '@tailwindcss/oxide-darwin-x64';
-  } else if (platform === 'darwin' && arch === 'arm64') {
-    targetPkg = '@tailwindcss/oxide-darwin-arm64';
-  }
-
-  if (targetPkg) {
-    console.log(`[@tailwindcss/oxide] Selected package for installation: ${targetPkg}`);
-    try {
-      execSync(`npm install --no-save --legacy-peer-deps ${targetPkg}`, { stdio: 'inherit' });
-      console.log('[@tailwindcss/oxide] Successfully installed native binary.');
-    } catch (installError) {
-      console.warn('[@tailwindcss/oxide] Optional native binary install failed or restricted.');
-    }
-  }
-
-  // Re-verify after install attempt
-  try {
-    const oxide = require('@tailwindcss/oxide');
-    if (oxide && oxide.Scanner) {
-      new oxide.Scanner({ sources: [] });
-      isWorking = true;
-      console.log('[@tailwindcss/oxide] Native binding successfully verified.');
-    }
-  } catch (verifyErr) {
-    console.warn('[@tailwindcss/oxide] Native binding still unavailable. Activating pure JavaScript fallback...');
-    patchOxideFallback();
-  }
+  console.log('[@tailwindcss/oxide] Activating instant pure JavaScript fallback scanner...');
+  patchOxideFallback();
 }
+
 
 
