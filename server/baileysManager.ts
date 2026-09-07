@@ -125,37 +125,52 @@ export async function initBaileys(merchantId: string = 'merchant', forceNew: boo
 
       if (connection === 'close') {
         const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
-        const shouldReconnect = statusCode !== DisconnectReason?.loggedOut;
+        const isTerminalLogout = statusCode === DisconnectReason?.loggedOut || statusCode === 401;
+        const isConnectionReplaced = statusCode === DisconnectReason?.connectionReplaced || statusCode === 440;
+        const shouldReconnect = !isTerminalLogout && !isConnectionReplaced;
+        
         console.log(`[Baileys] Connection closed for ${mId}. Reason code: ${statusCode}, reconnect: ${shouldReconnect}`);
 
         state.status = 'disconnected';
         state.qrRaw = '';
         state.qrDataUrl = '';
 
-        if (statusCode === DisconnectReason?.loggedOut) {
-          console.log(`[Baileys] Session logged out by user. Clearing auth files.`);
-          try {
-            if (fs.existsSync(authFolder)) {
-              fs.rmSync(authFolder, { recursive: true, force: true });
-            }
-          } catch (e) {}
-          state.phone = '';
-          state.name = '';
+        if (isTerminalLogout || isConnectionReplaced) {
+          console.log(`[Baileys] Session disconnected (code ${statusCode}). Stopping auto-reconnect to prevent conflicts.`);
+          if (isTerminalLogout) {
+            try {
+              if (fs.existsSync(authFolder)) {
+                fs.rmSync(authFolder, { recursive: true, force: true });
+              }
+            } catch (e) {}
+            state.phone = '';
+            state.name = '';
+          }
         } else if (shouldReconnect) {
           state.reconnectAttempts = (state.reconnectAttempts || 0) + 1;
-          const delay = Math.min(5000 * state.reconnectAttempts, 30000);
-          console.log(`[Baileys] Auto-reconnecting in ${delay}ms...`);
-          setTimeout(() => {
-            initBaileys(mId, false).catch(err => console.error('[Baileys] Reconnect failed:', err));
-          }, delay);
+          if (state.reconnectAttempts <= 5) {
+            const delay = Math.min(5000 * state.reconnectAttempts, 30000);
+            console.log(`[Baileys] Auto-reconnecting in ${delay}ms (Attempt ${state.reconnectAttempts}/5)...`);
+            setTimeout(() => {
+              initBaileys(mId, false).catch(err => console.error('[Baileys] Reconnect failed:', err));
+            }, delay);
+          } else {
+            console.warn(`[Baileys] Max reconnect attempts reached for ${mId}. Standing by for user action.`);
+          }
         }
       } else if (connection === 'open') {
         console.log(`[Baileys] ✅ Connection OPEN & Authenticated for merchant: ${mId}`);
         state.status = 'connected';
         state.qrRaw = '';
         state.qrDataUrl = '';
-        state.reconnectAttempts = 0;
         state.lastConnectedAt = new Date().toISOString();
+
+        // Reset reconnect attempts only after 20s of stable connection
+        setTimeout(() => {
+          if (state.status === 'connected') {
+            state.reconnectAttempts = 0;
+          }
+        }, 20000);
 
         const userObj = sock.user;
         if (userObj) {
