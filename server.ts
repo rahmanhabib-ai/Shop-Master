@@ -3773,7 +3773,7 @@ async function startServer() {
     });
   }
 
-  // Universal port and socket resolution for Phusion Passenger, cPanel, Hostinger, Docker, and local
+  // Universal port and socket resolution for Hostinger, cPanel, Docker, and local
   const onServerReady = () => {
     console.log(`[Server Ready] Server successfully listening and accepting incoming requests.`);
     // Auto-resume previously authenticated Baileys WhatsApp sockets
@@ -3782,20 +3782,13 @@ async function startServer() {
     });
   };
 
-  if (typeof (globalThis as any).PhusionPassenger !== 'undefined') {
-    (app as any).listen('passenger', onServerReady);
-  } else if (process.env.PORT) {
-    const rawPort = process.env.PORT;
-    const numPort = Number(rawPort);
-    if (!isNaN(numPort) && numPort > 0) {
-      app.listen(numPort, '0.0.0.0', onServerReady);
-    } else {
-      (app as any).listen(rawPort, onServerReady);
-    }
-  } else if (process.env.PASSENGER_APP_ENV || process.env.PASSENGER_BASE_URI) {
-    (app as any).listen('passenger', onServerReady);
+  const targetPort = process.env.PORT || 3000;
+  const numPort = Number(targetPort);
+
+  if (!isNaN(numPort) && numPort > 0) {
+    app.listen(numPort, '0.0.0.0', onServerReady);
   } else {
-    app.listen(3000, '0.0.0.0', onServerReady);
+    (app as any).listen(targetPort, onServerReady);
   }
 }
 

@@ -100,18 +100,12 @@ if (isElectron) {
         console.log(`[Emergency Server] Server listening and ready.`);
       };
 
-      if (typeof PhusionPassenger !== 'undefined') {
-        server.listen('passenger', onListen);
-      } else if (process.env.PORT) {
-        const rawPort = process.env.PORT;
-        const numPort = Number(rawPort);
-        if (!isNaN(numPort) && numPort > 0) {
-          server.listen(numPort, '0.0.0.0', onListen);
-        } else {
-          server.listen(rawPort, onListen);
-        }
+      const targetPort = process.env.PORT || 3000;
+      const numPort = Number(targetPort);
+      if (!isNaN(numPort) && numPort > 0) {
+        server.listen(numPort, '0.0.0.0', onListen);
       } else {
-        server.listen(3000, '0.0.0.0', onListen);
+        server.listen(targetPort, onListen);
       }
     } catch (fallbackErr) {
       console.error("[Emergency Server] Critical failure in fallback server:", fallbackErr);
